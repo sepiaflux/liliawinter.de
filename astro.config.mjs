@@ -6,9 +6,4 @@ import sitemap from "@astrojs/sitemap";
 export default defineConfig({
   site: "https://liliawinter.de",
   integrations: [react(), mdx(), sitemap()],
-  vite: {
-    ssr: {
-      noExternal: ["three", "@react-three/fiber", "@react-three/drei", "@react-three/postprocessing"],
-    },
-  },
 });

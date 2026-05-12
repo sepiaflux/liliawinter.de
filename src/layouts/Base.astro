@@ -1,26 +1,53 @@
 ---
 interface Props {
   title?: string;
+  description?: string;
+  ogImage?: string;
 }
-const { title = "Lilia Winter — Vibecheck" } = Astro.props;
+
+const {
+  title = "Lilia Winter — Video, Foto, Installation",
+  description = "Eine driftende Sammlung von Video- und Fotoarbeiten zwischen Beobachtung und Auflösung. Berlin, seit 2019.",
+  ogImage = "/portfolio/ghostworld-zoe/cover.jpg",
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://liliawinter.de").toString();
+const ogImageAbs = new URL(ogImage, Astro.site ?? "https://liliawinter.de").toString();
 ---
 
 <!doctype html>
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#edcdd1" />
+
     <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImageAbs} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content="de_DE" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageAbs} />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..900,0..100;1,9..144,300..900,0..100&family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@100..800&family=Syne:wght@400..800&family=Tangerine:wght@400;700&family=Italianno&family=Pinyon+Script&family=Birthstone&family=Caveat:wght@400..700&family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=DM+Serif+Display:ital@0;1&family=Petit+Formal+Script&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@300..600&display=swap"
       rel="stylesheet"
     />
     <style is:global>
       :root {
-        --bg: #f3f1ec;
+        --bg: #edcdd1;
         --ink: #0b0b0b;
         --muted: #6b6760;
         --accent: #c44a2c;
@@ -28,13 +55,6 @@ const { title = "Lilia Winter — Vibecheck" } = Astro.props;
         --fraunces: "Fraunces", "Times New Roman", serif;
         --sans: "Space Grotesk", system-ui, sans-serif;
         --mono: "JetBrains Mono", ui-monospace, monospace;
-        --display: "Syne", "Space Grotesk", sans-serif;
-        --fairy: "Tangerine", "Italianno", "Pinyon Script", cursive;
-        --script: "Italianno", "Tangerine", cursive;
-        --hand: "Caveat", "Tangerine", cursive;
-        --ornament: "Birthstone", "Italianno", cursive;
-        --cormorant: "Cormorant Garamond", "Times New Roman", serif;
-        --dm-serif: "DM Serif Display", "Times New Roman", serif;
       }
       * { box-sizing: border-box; }
       html, body {
@@ -47,9 +67,20 @@ const { title = "Lilia Winter — Vibecheck" } = Astro.props;
         text-rendering: optimizeLegibility;
         overscroll-behavior: none;
       }
+      html, body { min-height: 100%; }
+      body { overflow-x: hidden; }
       a { color: inherit; }
       img { display: block; max-width: 100%; }
       ::selection { background: var(--ink); color: var(--bg); }
+
+      /* Respect reduced motion globally for any CSS animation/transition */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
     </style>
   </head>
   <body>

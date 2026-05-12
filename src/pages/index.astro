@@ -1,8 +1,9 @@
 ---
 import Base from "../layouts/Base.astro";
-import VibeCheck from "../components/VibeCheck.tsx";
+import Home from "../components/Home.tsx";
+import { works } from "../data/works";
 ---
 
-<Base title="Lilia Winter — Vibecheck">
-  <VibeCheck client:only="react" />
+<Base title="Lilia Winter — Video, Foto, Installation">
+  <Home client:only="react" works={works} />
 </Base>

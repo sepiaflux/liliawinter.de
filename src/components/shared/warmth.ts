@@ -1,11 +1,11 @@
 // Shared color-temperature utilities for the Warmth family of variants.
 
-// Quiet cream palette. Differences between cool/warm are deliberately
-// small so the page reads as "one cream" — the cursor reactivity is what
-// the eye picks up, not the gradient itself.
-export const COOL = "#e2e0db";
-export const NEUTRAL = "#ece8e0";
-export const WARM = "#efe1ce";
+// Quiet pink-cream palette. Differences between cool/warm are deliberately
+// small so the page reads as "one cream with a hint of rose" — the cursor
+// reactivity is what the eye picks up, not the gradient itself.
+export const COOL = "#ead4d8";
+export const NEUTRAL = "#edcdd1";
+export const WARM = "#edc4c8";
 
 export function lerpHex(a: string, b: string, t: number): string {
   const pa = parseInt(a.slice(1), 16);
@@ -37,6 +37,6 @@ export function warmthGradient(mx: number, opts?: { cool?: string; neutral?: str
 export function warmthBg({ mx, my }: { mx: number; my: number }) {
   return {
     base: warmthGradient(mx),
-    halo: `radial-gradient(circle at ${mx * 100}% ${my * 100}%, rgba(255, 218, 178, 0.28) 0%, rgba(255, 218, 178, 0.12) 14%, transparent 32%)`,
+    halo: `radial-gradient(circle at ${mx * 100}% ${my * 100}%, rgba(245, 205, 210, 0.30) 0%, rgba(245, 205, 210, 0.12) 14%, transparent 32%)`,
   };
 }
