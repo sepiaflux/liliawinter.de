@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { works } from "../data/works";
 import DriftWarmth from "./variants/DriftWarmth";
-import WarmEditorial from "./variants/WarmEditorial";
-import WarmCascade from "./variants/WarmCascade";
-import WarmMosaic from "./variants/WarmMosaic";
+import WarmthFairyDust from "./variants/WarmthFairyDust";
+import WarmthFairyAsh from "./variants/WarmthFairyAsh";
+import WarmthFairyEmber from "./variants/WarmthFairyEmber";
+import WarmthFairySpiral from "./variants/WarmthFairySpiral";
+import WarmthFairyOrbit from "./variants/WarmthFairyOrbit";
+import WarmthFairyMist from "./variants/WarmthFairyMist";
+import WarmthFairyBreath from "./variants/WarmthFairyBreath";
+import WarmthFairyLavender from "./variants/WarmthFairyLavender";
+import WarmthFairyRosegold from "./variants/WarmthFairyRosegold";
+import WarmthFairyTwilight from "./variants/WarmthFairyTwilight";
+import WarmthFairyBurst from "./variants/WarmthFairyBurst";
 
 type VariantDef = {
   id: string;
@@ -14,38 +22,85 @@ type VariantDef = {
   Component: React.ComponentType<{ works: typeof works }>;
 };
 
+const baseBg = "#ece8e0";
+const baseInk = "#0b0b0b";
+
 const variants: VariantDef[] = [
   {
     id: "01-warmth",
     label: "01 — Warmth (Baseline)",
-    blurb: "Asymmetrisches Drift-Grid + Standard-Detail (Hero + Text + Thumb-Strip).",
-    bg: "#ece8e0",
-    ink: "#0b0b0b",
-    Component: DriftWarmth,
+    blurb: "Drift-Grid + subtiler 3D-Tilt + Image-Cycle on Hover.",
+    bg: baseBg, ink: baseInk, Component: DriftWarmth,
   },
   {
-    id: "02-editorial",
-    label: "02 — Warm · Editorial",
-    blurb: "Ruhigeres 3+3-Stagger-Grid + Magazin-Spread-Detail (Cormorant italic).",
-    bg: "#ece8e0",
-    ink: "#0b0b0b",
-    Component: WarmEditorial,
+    id: "02-fairydust",
+    label: "02 — Fairy Dust (Original)",
+    blurb: "Pale-Gold-Partikel fallen hinter dem Cursor — Referenz.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyDust,
+  },
+  // — Aufwärts —
+  {
+    id: "03-ash",
+    label: "03 — Fairy Ash ✦",
+    blurb: "Steigt auf · pearl + cream + peach · langsam.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyAsh,
   },
   {
-    id: "03-cascade",
-    label: "03 — Warm · Cascade",
-    blurb: "Diagonale Kaskade aus überlappenden Tiles + Full-Bleed-Detail mit Overlay-Text.",
-    bg: "#ece8e0",
-    ink: "#0b0b0b",
-    Component: WarmCascade,
+    id: "04-ember",
+    label: "04 — Fairy Ember ✦",
+    blurb: "Steigt auf wie Glut · coral + rose-gold · sparse, mit Flicker.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyEmber,
+  },
+  // — Orbital —
+  {
+    id: "05-spiral",
+    label: "05 — Fairy Spiral ✦",
+    blurb: "Partikel kreisen kurz um den Cursor · rose + plum + lilac.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairySpiral,
   },
   {
-    id: "04-mosaic",
-    label: "04 — Warm · Mosaic",
-    blurb: "Hero-zentriertes Mosaik (kaum Rotation) + 2×2-Grid-Detail mit Text-Spalte.",
-    bg: "#ece8e0",
-    ink: "#0b0b0b",
-    Component: WarmMosaic,
+    id: "06-orbit",
+    label: "06 — Fairy Orbit ✦",
+    blurb: "Cloud aus 25 Partikeln umkreist Cursor permanent · sage + mint.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyOrbit,
+  },
+  // — Slow / Sparse —
+  {
+    id: "07-mist",
+    label: "07 — Fairy Mist ✦",
+    blurb: "Driftet horizontal in Cursor-Richtung · pale-blue + silver.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyMist,
+  },
+  {
+    id: "08-breath",
+    label: "08 — Fairy Breath ✦",
+    blurb: "Sehr sparse · mint + ivory · Partikel atmen quasi auf der Stelle.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyBreath,
+  },
+  {
+    id: "09-lavender",
+    label: "09 — Fairy Lavender ✦",
+    blurb: "Langsamer dichter Fall · lavender + lilac + silver.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyLavender,
+  },
+  // — Varied —
+  {
+    id: "10-rosegold",
+    label: "10 — Fairy Rosegold ✦",
+    blurb: "Springt kurz hoch, dann fällt · rose-gold + champagne, kein Gelb.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyRosegold,
+  },
+  {
+    id: "11-twilight",
+    label: "11 — Fairy Twilight ✦",
+    blurb: "Dusty blue Standard-Fall · alle 20 Stück ein heller Stern.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyTwilight,
+  },
+  {
+    id: "12-burst",
+    label: "12 — Fairy Burst ✦",
+    blurb: "Rhythmische Pulse-Ringe alle 600–800ms · pearl + silver.",
+    bg: baseBg, ink: baseInk, Component: WarmthFairyBurst,
   },
 ];
 
@@ -117,7 +172,7 @@ export default function VibeCheck() {
         <Variant works={works} />
       </div>
 
-      <Switcher
+      {variants.length > 1 && <Switcher
         variants={variants}
         active={active}
         open={open}
@@ -126,7 +181,7 @@ export default function VibeCheck() {
         step={step}
         ink={v.ink}
         bg={v.bg}
-      />
+      />}
     </div>
   );
 }

@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import type { Work } from "../../data/works";
 import { useFloating, useMouse } from "./useFloating";
 import DetailViewDefault from "./DetailView";
@@ -24,14 +30,32 @@ export const driftLayout: Tile[] = [
 
 export type DetailProps = { work: Work; onClose: () => void; theme?: "light" | "dark" };
 
+export type TileProps = {
+  work: Work;
+  tile: Tile;
+  index: number;
+  // Mouse offset in [-0.5, 0.5] suitable for parallax multiplication.
+  offX: number;
+  offY: number;
+  // Raw mouse position in [0, 1] (useful for distance-based effects).
+  mx: number;
+  my: number;
+  hover: number | null;
+  onHover: (i: number | null) => void;
+  onOpen: () => void;
+  rotateAmp: number;
+};
+
 type Props = {
   works: Work[];
   theme?: "light" | "dark";
   background?: (ctx: { mx: number; my: number; hover: number | null }) => ReactNode;
   tiles?: Tile[];
   Detail?: ComponentType<DetailProps>;
-  chrome?: ReactNode;             // override the default header + blurb
-  rotateAmp?: number;             // multiplier on rotation (1 = full, 0 = no rotation)
+  chrome?: ReactNode;
+  rotateAmp?: number;
+  // Override the tile rendering. Receives everything it needs to animate.
+  Tile?: ComponentType<TileProps>;
 };
 
 export default function DriftBase({
@@ -42,6 +66,7 @@ export default function DriftBase({
   Detail = DetailViewDefault,
   chrome,
   rotateAmp = 1,
+  Tile = DefaultDriftTile,
 }: Props) {
   const { mx, my } = useMouse(0.1);
   const [hover, setHover] = useState<number | null>(null);
@@ -155,13 +180,15 @@ export default function DriftBase({
       )}
 
       {list.map((w, i) => (
-        <DriftTile
+        <Tile
           key={w.slug}
           work={w}
           tile={tiles[i]}
           index={i}
           offX={offX}
           offY={offY}
+          mx={mx}
+          my={my}
           hover={hover}
           onHover={setHover}
           onOpen={() => open(w)}
@@ -187,7 +214,8 @@ export default function DriftBase({
   );
 }
 
-function DriftTile({
+// ---------------- Default tile ----------------
+export function DefaultDriftTile({
   work,
   tile,
   index,
@@ -197,17 +225,7 @@ function DriftTile({
   onHover,
   onOpen,
   rotateAmp,
-}: {
-  work: Work;
-  tile: Tile;
-  index: number;
-  offX: number;
-  offY: number;
-  hover: number | null;
-  onHover: (i: number | null) => void;
-  onOpen: () => void;
-  rotateAmp: number;
-}) {
+}: TileProps) {
   const f = useFloating(index, { ampXY: 5, ampRot: 0.35 * rotateAmp, ampScale: 0.004, speed: 0.7 });
 
   const isHover = hover === index;
