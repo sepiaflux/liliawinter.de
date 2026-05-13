@@ -3,6 +3,7 @@ import type { Work } from "../../data/works";
 import { useMouse } from "./useFloating";
 import { WarmthLayer } from "./WarmthLayer";
 import FairyAshLayer from "./FairyAshLayer";
+import SeaShimmer from "./SeaShimmer";
 import DetailView from "./DetailView";
 import BubbleScene, { type BubbleSpec, type BubbleTransform } from "./BubbleScene";
 import PopDroplets from "./PopDroplets";
@@ -31,7 +32,7 @@ const SLOTS: Slot[] = [
   { cx: 93, cy: 39, size: 18, depth: 0.6  },
 ];
 
-const POP_OPEN_DELAY = 220;
+const POP_OPEN_DELAY = 380;
 
 export default function DriftBase({ works }: { works: Work[] }) {
   const { mx, my } = useMouse(0.1);
@@ -39,8 +40,31 @@ export default function DriftBase({ works }: { works: Work[] }) {
   const [poppingIdx, setPoppingIdx] = useState<number | null>(null);
   const [selected, setSelected] = useState<Work | null>(null);
   const [detailIn, setDetailIn] = useState(false);
+  const [ready, setReady] = useState(false);
 
   const list = works.slice(0, SLOTS.length);
+
+  // Preload every cover image so the bubbles never pop in over a missing
+  // texture. Once all images resolve (or error), unlock the intro.
+  useEffect(() => {
+    let cancelled = false;
+    const loads = list.map(
+      (w) =>
+        new Promise<void>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = w.cover;
+        }),
+    );
+    Promise.all(loads).then(() => {
+      if (!cancelled) setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const bubbles: BubbleSpec[] = list.map((w, i) => ({
     slug: w.slug,
@@ -107,9 +131,10 @@ export default function DriftBase({ works }: { works: Work[] }) {
         color: "#0b0b0b",
       }}
     >
-      {/* Background warmth + fairy dust */}
+      {/* Background warmth + sea shimmer + fairy dust */}
       <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
         <WarmthLayer mx={mx} my={my} />
+        <SeaShimmer />
         <FairyAshLayer />
       </div>
 
@@ -123,11 +148,17 @@ export default function DriftBase({ works }: { works: Work[] }) {
           my={my}
           mode="desktop"
           transformsRef={transformsRef}
+          startInitialSpawn={ready}
         />
       </div>
 
-      {/* Invisible click/hover/keyboard targets, one per bubble */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 3 }}>
+      {/* Invisible click/hover/keyboard targets, one per bubble. The
+          container itself is pointer-events:none so it never intercepts
+          clicks meant for the detail view underneath (zIndex 20); the
+          per-bubble wrappers re-enable pointer events only when the
+          bubble should be clickable. zIndex sits above the detail view
+          so pop droplets render OVER the detail fade-in. */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none" }}>
         {list.map((work, i) => {
           const s = SLOTS[i];
           return (
@@ -275,6 +306,36 @@ export default function DriftBase({ works }: { works: Work[] }) {
           <DetailView work={selected} onClose={close} />
         </div>
       )}
+
+      {/* Loading veil — covers everything until cover images are
+          preloaded; fades out as the bubbles start popping in. */}
+      <div
+        aria-hidden={ready}
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 30,
+          display: "grid",
+          placeItems: "center",
+          background: "var(--bg, #edcdd1)",
+          opacity: ready ? 0 : 1,
+          pointerEvents: ready ? "none" : "auto",
+          transition: "opacity 0.45s ease",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            letterSpacing: "0.28em",
+            textTransform: "uppercase",
+            color: "rgba(11,11,11,0.55)",
+            animation: "loading-pulse 1.6s ease-in-out infinite",
+          }}
+        >
+          Lade
+        </div>
+      </div>
     </div>
   );
 }

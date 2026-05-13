@@ -3,10 +3,10 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 
-// Cover disc shader: stays fully opaque (so three.js samples it into the
-// transmission buffer) but the fragment color mixes toward the warm pink
-// BG near the disc's rim — so the photo visually dissolves into the
-// bubble's iridescent edge instead of ending at a hard circle.
+// Cover disc shader: stays IN FRONT of the bubble (no refraction) and
+// fades to fully transparent toward the rim — so the iridescent bubble
+// shell underneath is visible at the edges instead of being painted
+// over by a hard or pink-tinted disc.
 const COVER_VERT = /* glsl */ `
   varying vec2 vUv;
   void main() {
@@ -17,19 +17,16 @@ const COVER_VERT = /* glsl */ `
 const COVER_FRAG = /* glsl */ `
   varying vec2 vUv;
   uniform sampler2D map;
-  uniform vec3 fadeColor;
   uniform float fadeStart;
   uniform float fadeEnd;
   uniform float dim;
   void main() {
     float r = distance(vUv, vec2(0.5)) * 2.0;
-    float t = smoothstep(fadeStart, fadeEnd, r);
+    float alpha = 1.0 - smoothstep(fadeStart, fadeEnd, r);
     vec4 tex = texture2D(map, vUv);
-    vec3 col = mix(tex.rgb, fadeColor, t) * dim;
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(tex.rgb * dim, tex.a * alpha);
   }
 `;
-const BG_PINK = new THREE.Color("#edcdd1");
 
 // Real 3D soap bubbles. Each bubble is a transparent glass sphere with
 // the three.js MeshPhysicalMaterial transmission + iridescence
@@ -68,6 +65,10 @@ type Props = {
   // Optional ref the parent can pass to sync DOM hitboxes / captions
   // with the bubbles' true rendered positions each frame.
   transformsRef?: React.MutableRefObject<BubbleTransform[]>;
+  // When this becomes true, bubbles pop in one after another with a
+  // small stagger. Used to play the intro sequence once assets are
+  // preloaded.
+  startInitialSpawn?: boolean;
 };
 
 export default function BubbleScene(props: Props) {
@@ -96,7 +97,16 @@ export default function BubbleScene(props: Props) {
   );
 }
 
-function Scene({ bubbles, hoverIdx, poppingIdx, mx, my, mode, transformsRef }: Props) {
+function Scene({
+  bubbles,
+  hoverIdx,
+  poppingIdx,
+  mx,
+  my,
+  mode,
+  transformsRef,
+  startInitialSpawn,
+}: Props) {
   const covers = useTexture(bubbles.map((b) => b.cover));
   useEffect(() => {
     covers.forEach((t) => {
@@ -125,9 +135,11 @@ function Scene({ bubbles, hoverIdx, poppingIdx, mx, my, mode, transformsRef }: P
   }, [bubbles, mode, size.width, size.height]);
 
   const desired = useRef<{ x: number; y: number }[]>([]);
-  // Spawn-in animation: timestamp (ms) when each bubble last re-appeared
-  // after being popped. 0 = no animation in progress.
+  // Spawn-in animation: timestamp (ms) when each bubble should start
+  // its 0→1 scale-in. May be a future timestamp (for stagger). 0 = no
+  // animation pending or active.
   const spawnAt = useRef<number[]>([]);
+  const introFired = useRef(false);
   const prevPopping = useRef<number | null>(null);
   // Damped spring state for hover scale + env-light pulse (per bubble).
   // Underdamped values give the bouncy "overshoot then settle" feel.
@@ -146,6 +158,17 @@ function Scene({ bubbles, hoverIdx, poppingIdx, mx, my, mode, transformsRef }: P
     }
     if (spawnAt.current.length !== bubbles.length) {
       spawnAt.current = bubbles.map(() => 0);
+    }
+
+    // Trigger the intro stagger exactly once, after the parent signals
+    // "assets ready". Each bubble gets a small offset so they pop in
+    // one after another.
+    if (startInitialSpawn && !introFired.current && bubbles.length > 0) {
+      introFired.current = true;
+      const now = performance.now();
+      for (let i = 0; i < bubbles.length; i++) {
+        spawnAt.current[i] = now + i * 90;
+      }
     }
     if (hoverScale.current.length !== bubbles.length) {
       hoverScale.current = bubbles.map(() => 1);
@@ -195,9 +218,14 @@ function Scene({ bubbles, hoverIdx, poppingIdx, mx, my, mode, transformsRef }: P
       wobbles[i] = 1 + Math.sin(e * 0.27 + phaseS) * 0.015;
     }
 
-    // Soft collision resolution — push overlapping bubbles apart.
+    // Soft collision resolution + viewport clamp (desktop). Iterating
+    // both keeps each bubble fully on-screen even when push from
+    // collisions would otherwise spill it past the viewport edge.
     const margin = 8;
-    for (let iter = 0; iter < 4; iter++) {
+    const halfW = size.width / 2;
+    const halfH = size.height / 2;
+    const clampDesktop = mode === "desktop";
+    for (let iter = 0; iter < 5; iter++) {
       for (let i = 0; i < bubbles.length; i++) {
         for (let j = i + 1; j < bubbles.length; j++) {
           const pi = desired.current[i];
@@ -220,6 +248,16 @@ function Scene({ bubbles, hoverIdx, poppingIdx, mx, my, mode, transformsRef }: P
           }
         }
       }
+      if (clampDesktop) {
+        for (let i = 0; i < bubbles.length; i++) {
+          const r = layout[i].radiusPx;
+          const p = desired.current[i];
+          if (p.x < -halfW + r) p.x = -halfW + r;
+          else if (p.x > halfW - r) p.x = halfW - r;
+          if (p.y < -halfH + r) p.y = -halfH + r;
+          else if (p.y > halfH - r) p.y = halfH - r;
+        }
+      }
     }
 
     for (let i = 0; i < bubbles.length; i++) {
@@ -228,13 +266,9 @@ function Scene({ bubbles, hoverIdx, poppingIdx, mx, my, mode, transformsRef }: P
 
       if (poppingIdx === i) {
         g.visible = false;
-        if (transformsRef && transformsRef.current) {
-          if (!transformsRef.current[i]) {
-            transformsRef.current[i] = { dx: 0, dy: 0, scale: 0, visible: false };
-          }
-          transformsRef.current[i].visible = false;
-          transformsRef.current[i].scale = 0;
-        }
+        // Don't touch transformsRef — the wrapper keeps its last frame's
+        // transform so PopDroplets render exactly where the bubble was,
+        // at its last drifted position + scale.
         continue;
       }
       g.visible = true;
@@ -256,13 +290,16 @@ function Scene({ bubbles, hoverIdx, poppingIdx, mx, my, mode, transformsRef }: P
       lightVel.current[i] *= friction;
       lightMul.current[i] += lightVel.current[i];
 
-      // Spawn-in scale (0 → 1 over ~350ms with ease-out-back overshoot)
+      // Spawn-in scale (0 → 1 over ~350ms with ease-out-back overshoot).
+      // If startedAt is in the future (intro stagger), we stay at 0.
       let spawnScale = 1;
       const startedAt = spawnAt.current[i];
       if (startedAt) {
         const elapsed = (performance.now() - startedAt) / 1000;
         const dur = 0.35;
-        if (elapsed < dur) {
+        if (elapsed < 0) {
+          spawnScale = 0;
+        } else if (elapsed < dur) {
           const k = elapsed / dur;
           const c1 = 1.70158;
           const c3 = c1 + 1;
@@ -352,13 +389,12 @@ function Bubble3D({
   attachMat: (m: THREE.MeshPhysicalMaterial | null) => void;
   attachInnerMat: (m: THREE.ShaderMaterial | null) => void;
 }) {
-  // Per-bubble uniforms — the shader fades the photo to the pink BG
-  // toward the rim so the iridescent shell can dominate the edge.
+  // Per-bubble uniforms — the shader alpha-fades the photo toward the
+  // rim so the iridescent shell underneath shows through.
   const uniforms = useMemo(
     () => ({
       map: { value: cover ?? null },
-      fadeColor: { value: BG_PINK.clone() },
-      fadeStart: { value: 0.55 },
+      fadeStart: { value: 0.6 },
       fadeEnd: { value: 1.0 },
       dim: { value: 1.0 },
     }),
@@ -367,20 +403,8 @@ function Bubble3D({
 
   return (
     <group ref={attachGroup}>
-      {cover && (
-        <mesh position={[0, 0, -radiusPx * 0.05]}>
-          <circleGeometry args={[radiusPx * 0.99, 96]} />
-          <shaderMaterial
-            ref={attachInnerMat}
-            uniforms={uniforms}
-            vertexShader={COVER_VERT}
-            fragmentShader={COVER_FRAG}
-            transparent={false}
-          />
-        </mesh>
-      )}
-
-      <mesh>
+      {/* Glass bubble shell — drawn first, mostly see-through */}
+      <mesh renderOrder={0}>
         <sphereGeometry args={[radiusPx, 96, 96]} />
         <meshPhysicalMaterial
           ref={attachMat}
@@ -404,6 +428,23 @@ function Bubble3D({
           side={THREE.DoubleSide}
         />
       </mesh>
+
+      {/* Cover disc — sits IN FRONT of the bubble (no refraction) and
+          fades to transparent at the rim so the iridescent shell stays
+          visible at the edges. */}
+      {cover && (
+        <mesh position={[0, 0, radiusPx * 1.02]} renderOrder={1}>
+          <circleGeometry args={[radiusPx * 0.99, 96]} />
+          <shaderMaterial
+            ref={attachInnerMat}
+            uniforms={uniforms}
+            vertexShader={COVER_VERT}
+            fragmentShader={COVER_FRAG}
+            transparent
+            depthWrite={false}
+          />
+        </mesh>
+      )}
     </group>
   );
 }

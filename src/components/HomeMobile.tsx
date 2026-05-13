@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Work } from "../data/works";
 import { WarmthLayer } from "./shared/WarmthLayer";
+import SeaShimmer from "./shared/SeaShimmer";
 import DetailView from "./shared/DetailView";
 import BubbleScene, {
   type BubbleSpec,
@@ -15,16 +16,37 @@ import PopDroplets from "./shared/PopDroplets";
 
 const OFFSETS = [0, -4, 3, -2, 4, -3, 2];          // horizontal sway, % of viewport width
 const SIZES_VW = [78, 70, 82, 66, 78, 72, 64];     // diameter, vw
-const POP_OPEN_DELAY = 220;
+const POP_OPEN_DELAY = 380;
 
 export default function HomeMobile({ works }: { works: Work[] }) {
   const [selected, setSelected] = useState<Work | null>(null);
   const [detailIn, setDetailIn] = useState(false);
   const [poppingIdx, setPoppingIdx] = useState<number | null>(null);
   const [bubbles, setBubbles] = useState<BubbleSpec[]>([]);
+  const [ready, setReady] = useState(false);
   const placeholderRefs = useRef<(HTMLDivElement | null)[]>([]);
   const innerRefs = useRef<(HTMLDivElement | null)[]>([]);
   const transformsRef = useRef<BubbleTransform[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loads = works.map(
+      (w) =>
+        new Promise<void>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = w.cover;
+        }),
+    );
+    Promise.all(loads).then(() => {
+      if (!cancelled) setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Measure each placeholder's center (in viewport %) and feed the scene.
   function measure() {
@@ -130,6 +152,7 @@ export default function HomeMobile({ works }: { works: Work[] }) {
     >
       <div style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}>
         <WarmthLayer mx={0.5} my={0.4} />
+        <SeaShimmer />
       </div>
 
       {/* 3D bubble canvas — fixed to viewport; positions are driven by the
@@ -143,6 +166,7 @@ export default function HomeMobile({ works }: { works: Work[] }) {
           my={0.5}
           mode="mobile"
           transformsRef={transformsRef}
+          startInitialSpawn={ready}
         />
       </div>
 
@@ -187,12 +211,13 @@ export default function HomeMobile({ works }: { works: Work[] }) {
       <main
         style={{
           position: "relative",
-          zIndex: 3,
+          zIndex: 25,
           padding: "24px 0 80px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           gap: 24,
+          pointerEvents: "none",
         }}
       >
         {works.map((work, i) => {
@@ -284,6 +309,34 @@ export default function HomeMobile({ works }: { works: Work[] }) {
           <DetailView work={selected} onClose={close} />
         </div>
       )}
+
+      <div
+        aria-hidden={ready}
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 30,
+          display: "grid",
+          placeItems: "center",
+          background: "var(--bg, #edcdd1)",
+          opacity: ready ? 0 : 1,
+          pointerEvents: ready ? "none" : "auto",
+          transition: "opacity 0.45s ease",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            letterSpacing: "0.28em",
+            textTransform: "uppercase",
+            color: "rgba(11,11,11,0.55)",
+            animation: "loading-pulse 1.6s ease-in-out infinite",
+          }}
+        >
+          Lade
+        </div>
+      </div>
     </div>
   );
 }
