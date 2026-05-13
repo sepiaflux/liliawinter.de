@@ -20,10 +20,19 @@ const COVER_FRAG = /* glsl */ `
   uniform float fadeStart;
   uniform float fadeEnd;
   uniform float dim;
+  uniform float imageAspect; // texture width / height
   void main() {
+    // CSS "object-fit: cover" — preserve image aspect, crop the
+    // overflowing axis so the photo never appears stretched.
+    vec2 sampleUv;
+    if (imageAspect > 1.0) {
+      sampleUv = vec2(0.5 + (vUv.x - 0.5) / imageAspect, vUv.y);
+    } else {
+      sampleUv = vec2(vUv.x, 0.5 + (vUv.y - 0.5) * imageAspect);
+    }
     float r = distance(vUv, vec2(0.5)) * 2.0;
     float alpha = 1.0 - smoothstep(fadeStart, fadeEnd, r);
-    vec4 tex = texture2D(map, vUv);
+    vec4 tex = texture2D(map, sampleUv);
     gl_FragColor = vec4(tex.rgb * dim, tex.a * alpha);
   }
 `;
@@ -208,8 +217,8 @@ function Scene({
       let parX = 0;
       let parY = 0;
       if (mode === "desktop") {
-        parX = (mx - 0.5) * b.depth * 90;
-        parY = -(my - 0.5) * b.depth * 90;
+        parX = (mx - 0.5) * b.depth * 60;
+        parY = -(my - 0.5) * b.depth * 60;
       }
 
       desired.current[i].x = baseX + dx + parX;
@@ -276,11 +285,11 @@ function Scene({
       const isHover = hoverIdx === i;
 
       // --- Bouncy hover via damped spring ---
-      // target=1.06 on hover, 1.0 otherwise. Underdamped → overshoots
-      // past target, settles back. Same spring drives the lighting
-      // pulse so the highlight feels alive with the same rhythm.
-      const sTarget = isHover ? 1.06 : 1;
-      const lTarget = isHover ? 1.6 : 1;
+      // Bigger scale + brighter envMap on the hovered bubble make it
+      // visibly stand out. Underdamped spring overshoots past target,
+      // settles back.
+      const sTarget = isHover ? 1.1 : 1;
+      const lTarget = isHover ? 2.4 : 1;
       const stiff = 0.22;
       const friction = 0.78;
       hoverVel.current[i] += (sTarget - hoverScale.current[i]) * stiff;
@@ -311,7 +320,9 @@ function Scene({
 
       const finalScale = wobbles[i] * hoverScale.current[i] * spawnScale;
 
-      g.position.set(desired.current[i].x, desired.current[i].y, 0);
+      // Hovered bubble gets pushed toward the camera so it sorts in
+      // front of every other bubble (transparent pass renders far→near).
+      g.position.set(desired.current[i].x, desired.current[i].y, isHover ? 50 : 0);
       g.rotation.z = rots[i];
       g.scale.set(finalScale, finalScale, finalScale);
 
@@ -333,11 +344,13 @@ function Scene({
         tr.visible = true;
       }
 
-      // Dim non-hovered bubbles slightly via the shader's `dim` uniform.
+      // Cover-dim uniform: the hovered bubble brightens slightly, the
+      // others dim only a touch (so the selection stands out, not the
+      // non-selected greying out aggressively).
       const innerMat = innerMatRefs.current[i];
       if (innerMat) {
         const isDim = hoverIdx !== null && !isHover && poppingIdx === null;
-        const target = isDim ? 0.55 : 1;
+        const target = isHover ? 1.12 : isDim ? 0.92 : 1;
         const dimU = innerMat.uniforms.dim;
         if (dimU) dimU.value = dimU.value + (target - dimU.value) * 0.12;
       }
@@ -390,16 +403,26 @@ function Bubble3D({
   attachInnerMat: (m: THREE.ShaderMaterial | null) => void;
 }) {
   // Per-bubble uniforms — the shader alpha-fades the photo toward the
-  // rim so the iridescent shell underneath shows through.
-  const uniforms = useMemo(
-    () => ({
+  // rim and aspect-corrects (object-fit: cover) so the photo is never
+  // stretched into the disc's square UV space.
+  const uniforms = useMemo(() => {
+    let aspect = 1;
+    const img = cover?.image as
+      | { naturalWidth?: number; naturalHeight?: number; width?: number; height?: number }
+      | undefined;
+    if (img) {
+      const w = img.naturalWidth ?? img.width ?? 1;
+      const h = img.naturalHeight ?? img.height ?? 1;
+      if (w > 0 && h > 0) aspect = w / h;
+    }
+    return {
       map: { value: cover ?? null },
       fadeStart: { value: 0.6 },
       fadeEnd: { value: 1.0 },
       dim: { value: 1.0 },
-    }),
-    [cover],
-  );
+      imageAspect: { value: aspect },
+    };
+  }, [cover]);
 
   return (
     <group ref={attachGroup}>

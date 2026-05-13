@@ -26,43 +26,61 @@ const FRAG = /* glsl */ `
   uniform float iTime;
   uniform vec2 iResolution;
 
-  #define TAU 6.28318530718
-  #define MAX_ITER 5
+  // IQ-style domain-warped fBM. The key trick is the rotation per
+  // octave (mat2(0.8, 0.6, -0.6, 0.8)) which decorrelates octaves so
+  // the result has no visible tiling AND distributes evenly across the
+  // full canvas (no bottom-corner clustering).
 
-  // One tileable caustic layer. Two of these at different scales /
-  // offsets / speeds layered on top of each other break the periodicity
-  // so the result looks organic rather than geometric.
-  float causticLayer(vec2 uv, float t) {
-    vec2 p = mod(uv * TAU, TAU) - 250.0;
-    vec2 i = vec2(p);
-    float c = 1.0;
-    float inten = 0.005;
-    for (int n = 0; n < MAX_ITER; n++) {
-      float tn = t * (1.0 - (3.5 / float(n + 1)));
-      i = p + vec2(
-        cos(tn - i.x) + sin(tn + i.y),
-        sin(tn - i.y) + cos(tn + i.x)
-      );
-      c += 1.0 / length(vec2(
-        p.x / (sin(i.x + tn) / inten),
-        p.y / (cos(i.y + tn) / inten)
-      ));
+  float hash(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+  float vnoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+    return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+  }
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
+    for (int i = 0; i < 5; i++) {
+      v += a * vnoise(p);
+      p = rot * p * 2.0 + vec2(100.0);
+      a *= 0.5;
     }
-    c /= float(MAX_ITER);
-    c = 1.17 - pow(c, 1.4);
-    return clamp(pow(abs(c), 5.0), 0.0, 1.0);
+    return v;
+  }
+  // Warp-of-warp — Inigo Quilez's domain warping pattern.
+  float pattern(vec2 p, float t) {
+    vec2 q = vec2(
+      fbm(p + vec2(0.0, 0.0) + 0.05 * t),
+      fbm(p + vec2(5.2, 1.3) - 0.04 * t)
+    );
+    vec2 r = vec2(
+      fbm(p + 4.0 * q + vec2(1.7, 9.2) + 0.03 * t),
+      fbm(p + 4.0 * q + vec2(8.3, 2.8) - 0.02 * t)
+    );
+    return fbm(p + 4.0 * r);
   }
 
   void main() {
     vec2 uv = vUv * vec2(iResolution.x / iResolution.y, 1.0);
-    float t = iTime * 0.55;
+    float v = pattern(uv * 2.5, iTime * 0.9);
 
-    // Two layered caustics — different scales + offsets + speeds.
-    float a = causticLayer(uv * 1.35, t);
-    float b = causticLayer(uv * 0.72 + vec2(0.43, 0.31), t * 0.78);
-    float bright = clamp((a + b) * 0.6, 0.0, 1.0);
+    // Wide threshold + soft start so a large portion of the canvas
+    // carries some shimmer, not just a few hot spots.
+    float bright = smoothstep(0.35, 0.7, v);
 
-    vec3 col = vec3(1.0, 0.98, 0.97) * bright;
+    // Soft warm-pink tint instead of pure white → doesn't feel "too
+    // white" under the blend mode.
+    vec3 col = vec3(1.0, 0.93, 0.93) * bright;
     gl_FragColor = vec4(col, bright);
   }
 `;
@@ -102,7 +120,8 @@ export default function SeaShimmer() {
         inset: 0,
         pointerEvents: "none",
         mixBlendMode: "screen",
-        opacity: 0.26,
+        opacity: 0.15,
+        filter: "blur(1.5px)",
       }}
     >
       <Canvas

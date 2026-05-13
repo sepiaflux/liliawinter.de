@@ -14,8 +14,24 @@ import PopDroplets from "./shared/PopDroplets";
 // covers the viewport; invisible DOM placeholders scroll normally and
 // drive the bubbles' on-screen positions.
 
-const OFFSETS = [0, -4, 3, -2, 4, -3, 2];          // horizontal sway, % of viewport width
-const SIZES_VW = [78, 70, 82, 66, 78, 72, 64];     // diameter, vw
+// Hand-tuned mobile pattern: a 2-column grid with some bubbles paired
+// side-by-side and others centered full-width — breaks the "single
+// column" feel into a real composed arrangement.
+type MobileSlot = {
+  size: number;         // diameter, vw
+  col: "1" | "2" | "1 / 3"; // grid column placement
+  justify: "start" | "end" | "center";
+  offsetX: number;      // additional shift in vw
+};
+const LAYOUT: MobileSlot[] = [
+  { size: 44, col: "1",     justify: "start",  offsetX:  -2 },
+  { size: 38, col: "2",     justify: "end",    offsetX:   2 },
+  { size: 56, col: "1 / 3", justify: "center", offsetX:  -8 },
+  { size: 42, col: "1",     justify: "start",  offsetX:   4 },
+  { size: 48, col: "2",     justify: "end",    offsetX:  -4 },
+  { size: 52, col: "1 / 3", justify: "center", offsetX:  10 },
+  { size: 40, col: "1",     justify: "start",  offsetX:  -6 },
+];
 const POP_OPEN_DELAY = 380;
 
 export default function HomeMobile({ works }: { works: Work[] }) {
@@ -62,7 +78,7 @@ export default function HomeMobile({ works }: { works: Work[] }) {
         cover: works[i].cover,
         cxPct: (cx / window.innerWidth) * 100,
         cyPct: (cy / window.innerHeight) * 100,
-        sizeVw: SIZES_VW[i % SIZES_VW.length],
+        sizeVw: LAYOUT[i % LAYOUT.length].size,
         seed: i,
         depth: 0,
         driftAmpFactor: 0.22,
@@ -212,17 +228,17 @@ export default function HomeMobile({ works }: { works: Work[] }) {
         style={{
           position: "relative",
           zIndex: 25,
-          padding: "24px 0 80px",
-          display: "flex",
-          flexDirection: "column",
+          padding: "16px 12px 80px",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
           alignItems: "center",
-          gap: 24,
+          rowGap: 4,
+          columnGap: 4,
           pointerEvents: "none",
         }}
       >
         {works.map((work, i) => {
-          const size = SIZES_VW[i % SIZES_VW.length];
-          const offset = OFFSETS[i % OFFSETS.length];
+          const slot = LAYOUT[i % LAYOUT.length];
           return (
             // Outer = layout + sway. The Canvas measures this to know
             // where the bubble should sit, so it must NOT move with the
@@ -234,9 +250,11 @@ export default function HomeMobile({ works }: { works: Work[] }) {
               }}
               style={{
                 position: "relative",
-                width: `${size}vw`,
-                height: `${size}vw`,
-                transform: `translateX(${offset}vw)`,
+                width: `${slot.size}vw`,
+                height: `${slot.size}vw`,
+                gridColumn: slot.col,
+                justifySelf: slot.justify,
+                transform: `translateX(${slot.offsetX}vw)`,
                 pointerEvents: poppingIdx !== null ? "none" : "auto",
               }}
             >
@@ -271,6 +289,30 @@ export default function HomeMobile({ works }: { works: Work[] }) {
                     opacity: 0,
                   }}
                 />
+                {/* Caption — always visible on mobile (no hover available). */}
+                <div
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "flex-end",
+                    justifyContent: "center",
+                    fontFamily: "var(--mono)",
+                    fontSize: 10,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color: "#fff",
+                    mixBlendMode: "difference",
+                    pointerEvents: "none",
+                    textAlign: "center",
+                    padding: "0 10% 12%",
+                    opacity: poppingIdx === i ? 0 : 1,
+                    transition: "opacity 0.2s ease",
+                  }}
+                >
+                  {work.title} · {work.year}
+                </div>
                 {poppingIdx === i && <PopDroplets />}
               </div>
             </div>
