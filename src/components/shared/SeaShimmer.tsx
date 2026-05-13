@@ -47,10 +47,12 @@ const FRAG = /* glsl */ `
     return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
   }
   float fbm(vec2 p) {
+    // 4 octaves: visually indistinguishable from 5 after the blur,
+    // saves ~20% of per-pixel work.
     float v = 0.0;
     float a = 0.5;
     mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 4; i++) {
       v += a * vnoise(p);
       p = rot * p * 2.0 + vec2(100.0);
       a *= 0.5;
@@ -90,6 +92,7 @@ function Plane() {
   useFrame(({ clock, size }) => {
     const m = matRef.current;
     if (!m) return;
+    if (document.hidden) return;
     m.uniforms.iTime.value = clock.elapsedTime;
     m.uniforms.iResolution.value.set(size.width, size.height);
   });
@@ -127,7 +130,7 @@ export default function SeaShimmer() {
       <Canvas
         orthographic
         camera={{ position: [0, 0, 1] }}
-        dpr={[1, 1.5]}
+        dpr={[1, 1.25]}
         gl={{ alpha: true, antialias: false, powerPreference: "low-power" }}
         style={{ position: "absolute", inset: 0 }}
       >

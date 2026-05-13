@@ -119,8 +119,26 @@ export default function FairyAshLayer() {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number) => {
+      if (document.hidden) {
+        last = now;
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       const dt = Math.min(50, now - last) / 1000;
       last = now;
+
+      // Cheap early-out: if no live particles, no per-element work.
+      let anyAlive = false;
+      for (const p of pool) {
+        if (p.alive) {
+          anyAlive = true;
+          break;
+        }
+      }
+      if (!anyAlive) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
 
       for (const p of pool) {
         if (!p.alive) continue;

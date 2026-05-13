@@ -1,12 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import type { Work } from "../../data/works";
 import { useMouse } from "./useFloating";
 import { WarmthLayer } from "./WarmthLayer";
 import FairyAshLayer from "./FairyAshLayer";
-import SeaShimmer from "./SeaShimmer";
 import DetailView from "./DetailView";
-import BubbleScene, { type BubbleSpec, type BubbleTransform } from "./BubbleScene";
+import type { BubbleSpec, BubbleTransform } from "./BubbleScene";
 import PopDroplets from "./PopDroplets";
+
+// All WebGL is lazy-loaded so three.js + drei + r3f-perf stay out of
+// the initial bundle. The page renders text + warmth immediately;
+// shimmer + bubbles fade in once the chunk arrives.
+const BubbleScene = lazy(() => import("./BubbleScene"));
+const SeaShimmer = lazy(() => import("./SeaShimmer"));
 
 // Soap-bubble homepage: 7 floating glass bubbles rendered in real WebGL
 // (R3F + MeshTransmissionMaterial). Each bubble holds the work's cover
@@ -134,22 +139,26 @@ export default function DriftBase({ works }: { works: Work[] }) {
       {/* Background warmth + sea shimmer + fairy dust */}
       <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
         <WarmthLayer mx={mx} my={my} />
-        <SeaShimmer />
+        <Suspense fallback={null}>
+          <SeaShimmer />
+        </Suspense>
         <FairyAshLayer />
       </div>
 
       {/* 3D bubble canvas */}
       <div style={{ position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none" }}>
-        <BubbleScene
-          bubbles={bubbles}
-          hoverIdx={hover}
-          poppingIdx={poppingIdx}
-          mx={mx}
-          my={my}
-          mode="desktop"
-          transformsRef={transformsRef}
-          startInitialSpawn={ready}
-        />
+        <Suspense fallback={null}>
+          <BubbleScene
+            bubbles={bubbles}
+            hoverIdx={hover}
+            poppingIdx={poppingIdx}
+            mx={mx}
+            my={my}
+            mode="desktop"
+            transformsRef={transformsRef}
+            startInitialSpawn={ready}
+          />
+        </Suspense>
       </div>
 
       {/* Invisible click/hover/keyboard targets, one per bubble. The

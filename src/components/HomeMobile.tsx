@@ -1,13 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Work } from "../data/works";
 import { WarmthLayer } from "./shared/WarmthLayer";
-import SeaShimmer from "./shared/SeaShimmer";
 import DetailView from "./shared/DetailView";
-import BubbleScene, {
-  type BubbleSpec,
-  type BubbleTransform,
-} from "./shared/BubbleScene";
+import type { BubbleSpec, BubbleTransform } from "./shared/BubbleScene";
 import PopDroplets from "./shared/PopDroplets";
+
+const BubbleScene = lazy(() => import("./shared/BubbleScene"));
+const SeaShimmer = lazy(() => import("./shared/SeaShimmer"));
 
 // Mobile homepage: a vertical scrolling column of 3D soap bubbles. The
 // bubbles themselves live in a single fixed-position WebGL canvas that
@@ -168,22 +167,26 @@ export default function HomeMobile({ works }: { works: Work[] }) {
     >
       <div style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}>
         <WarmthLayer mx={0.5} my={0.4} />
-        <SeaShimmer />
+        <Suspense fallback={null}>
+          <SeaShimmer />
+        </Suspense>
       </div>
 
       {/* 3D bubble canvas — fixed to viewport; positions are driven by the
           scrolling placeholders below. */}
       <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none" }}>
-        <BubbleScene
-          bubbles={bubbles}
-          hoverIdx={null}
-          poppingIdx={poppingIdx}
-          mx={0.5}
-          my={0.5}
-          mode="mobile"
-          transformsRef={transformsRef}
-          startInitialSpawn={ready}
-        />
+        <Suspense fallback={null}>
+          <BubbleScene
+            bubbles={bubbles}
+            hoverIdx={null}
+            poppingIdx={poppingIdx}
+            mx={0.5}
+            my={0.5}
+            mode="mobile"
+            transformsRef={transformsRef}
+            startInitialSpawn={ready}
+          />
+        </Suspense>
       </div>
 
       <header

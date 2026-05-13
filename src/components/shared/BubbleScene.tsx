@@ -2,6 +2,7 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, useTexture } from "@react-three/drei";
 import * as THREE from "three";
+import { Perf } from "r3f-perf";
 
 // Cover disc shader: stays IN FRONT of the bubble (no refraction) and
 // fades to fully transparent toward the rim — so the iridescent bubble
@@ -81,14 +82,16 @@ type Props = {
 };
 
 export default function BubbleScene(props: Props) {
+  const dpr: [number, number] =
+    props.mode === "mobile" ? [1, 1.5] : [1, 2];
   return (
     <Canvas
       orthographic
       camera={{ position: [0, 0, 500], zoom: 1, near: 1, far: 2000 }}
-      dpr={[1, 2]}
+      dpr={dpr}
       gl={{
         alpha: true,
-        antialias: true,
+        antialias: false,
         powerPreference: "high-performance",
       }}
       style={{
@@ -101,6 +104,7 @@ export default function BubbleScene(props: Props) {
     >
       <Suspense fallback={null}>
         <Scene {...props} />
+        {import.meta.env.DEV && <Perf position="top-left" />}
       </Suspense>
     </Canvas>
   );
@@ -120,7 +124,9 @@ function Scene({
   useEffect(() => {
     covers.forEach((t) => {
       t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = 8;
+      t.anisotropy = 2;
+      t.generateMipmaps = true;
+      t.minFilter = THREE.LinearMipmapLinearFilter;
     });
   }, [covers]);
 
@@ -158,6 +164,9 @@ function Scene({
   const lightVel = useRef<number[]>([]);
 
   useFrame(({ clock }) => {
+    // Skip all per-frame work when the tab is hidden — saves battery
+    // and CPU while the user is on another tab.
+    if (typeof document !== "undefined" && document.hidden) return;
     const t = clock.getElapsedTime();
     const speed = 0.32;
     const e = t * speed;
@@ -329,7 +338,7 @@ function Scene({
       // Animate envMapIntensity with the same spring → the highlight on
       // the bubble fades up on hover and overshoots like the scale.
       const mat = matRefs.current[i];
-      if (mat) mat.envMapIntensity = 2 * lightMul.current[i];
+      if (mat) mat.envMapIntensity = 3.5 * lightMul.current[i];
 
       // Publish position + scale so DOM hitboxes/captions can follow.
       if (transformsRef && transformsRef.current) {
@@ -360,10 +369,11 @@ function Scene({
   return (
     <>
       <ambientLight intensity={0.4} />
-      {/* Real HDR env preset — non-negotiable for transmission +
-          iridescence to actually show. sunset gives warm rainbow play
-          that suits the pink BG. */}
-      <Environment preset="sunset" resolution={512} background={false} />
+      {/* HDR env preset — drives the iridescent rim and clearcoat
+          highlights. 256 keeps the specular highlight crisp (iridescence
+          itself is low-frequency, but clearcoat needs sharper reflections
+          to look like wet film). */}
+      <Environment preset="sunset" resolution={256} background={false} />
 
       {bubbles.map((b, i) => (
         <Bubble3D
@@ -426,13 +436,15 @@ function Bubble3D({
 
   return (
     <group ref={attachGroup}>
-      {/* Glass bubble shell — drawn first, mostly see-through */}
+      {/* Soap-film shell — iridescence + clearcoat carry the entire
+          look. We dropped transmission (which forced a full extra scene
+          render per bubble per frame) since the cover disc sits in
+          front anyway; the bubble's only see-through area is the rim,
+          handled by alpha + Fresnel-ish opacity. */}
       <mesh renderOrder={0}>
-        <sphereGeometry args={[radiusPx, 96, 96]} />
+        <sphereGeometry args={[radiusPx, 48, 32]} />
         <meshPhysicalMaterial
           ref={attachMat}
-          transmission={1}
-          thickness={0.05}
           roughness={0}
           metalness={0}
           ior={1.33}
@@ -442,22 +454,21 @@ function Bubble3D({
           iridescenceThicknessRange={[100, 400]}
           clearcoat={1}
           clearcoatRoughness={0}
-          envMapIntensity={2}
+          envMapIntensity={3.5}
           color="#ffffff"
-          attenuationColor="#ffffff"
           transparent
-          opacity={0.9}
+          opacity={0.8}
           depthWrite={false}
-          side={THREE.DoubleSide}
+          side={THREE.FrontSide}
         />
       </mesh>
 
-      {/* Cover disc — sits IN FRONT of the bubble (no refraction) and
-          fades to transparent at the rim so the iridescent shell stays
-          visible at the edges. */}
+      {/* Cover disc — sits IN FRONT of the bubble and fades to
+          transparent at the rim so the iridescent shell stays visible
+          at the edges. */}
       {cover && (
         <mesh position={[0, 0, radiusPx * 1.02]} renderOrder={1}>
-          <circleGeometry args={[radiusPx * 0.99, 96]} />
+          <circleGeometry args={[radiusPx * 0.99, 48]} />
           <shaderMaterial
             ref={attachInnerMat}
             uniforms={uniforms}
