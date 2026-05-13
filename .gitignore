@@ -23,4 +23,4 @@ pnpm-debug.log*
 .idea/
 
 # Source media — only the resized exports under public/portfolio/ go in git
-PORTFOLIO/
+/PORTFOLIO/
