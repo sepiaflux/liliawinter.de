@@ -81,6 +81,35 @@ const ogImageAbs = new URL(ogImage, Astro.site ?? "https://liliawinter.de").toSt
           transition-duration: 0.001ms !important;
         }
       }
+
+      /* Soap-bubble keyframes */
+      @keyframes bubble-spin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+      }
+      @keyframes bubble-wobble {
+        0%, 100% { transform: scale(1, 1);           border-radius: 50%; }
+        25%      { transform: scale(1.015, 0.985);   border-radius: 49% 51% 51% 49% / 51% 49% 49% 51%; }
+        50%      { transform: scale(0.985, 1.015);   border-radius: 52% 48% 49% 51% / 48% 52% 51% 49%; }
+        75%      { transform: scale(1.01, 0.99);     border-radius: 51% 49% 52% 48% / 49% 51% 48% 52%; }
+      }
+      /* Real soap-bubble pop: brief stretch, then INSTANT disappear at ~87%.
+         No fade — the film snaps and is gone in a single frame. */
+      @keyframes bubble-pop {
+        0%   { transform: scale(1);    opacity: 1; }
+        70%  { transform: scale(1.14); opacity: 1; }
+        86%  { transform: scale(1.22); opacity: 1; }
+        87%  { transform: scale(1.24); opacity: 0; }
+        100% { transform: scale(1.24); opacity: 0; }
+      }
+      /* Droplets emerge from where they're rendered (anchored at the rim)
+         and fly outward + slight gravity. They start invisible and pop in
+         right as the film snaps. */
+      @keyframes droplet-fly {
+        0%   { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+        100% { transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(0.4); opacity: 0; }
+      }
+      .scrollbar-hide::-webkit-scrollbar { display: none; }
     </style>
   </head>
   <body>

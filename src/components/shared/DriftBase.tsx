@@ -2,62 +2,72 @@ import { useEffect, useRef, useState } from "react";
 import type { Work } from "../../data/works";
 import { useMouse } from "./useFloating";
 import { WarmthLayer } from "./WarmthLayer";
-import { WarmthTile } from "./WarmthTile";
 import FairyAshLayer from "./FairyAshLayer";
 import DetailView from "./DetailView";
+import BubbleScene, { type BubbleSpec, type BubbleTransform } from "./BubbleScene";
+import PopDroplets from "./PopDroplets";
 
-// The drift-grid homepage: 7 tiles in an asymmetric layout, gentle idle
-// float + mouse parallax + 3D tilt on hover + image cycle. Background is a
-// subtle warmth gradient with rising ash particles tracking the cursor.
+// Soap-bubble homepage: 7 floating glass bubbles rendered in real WebGL
+// (R3F + MeshTransmissionMaterial). Each bubble holds the work's cover
+// photo refracted through the glass. Click → bubble pops (real 3D scale +
+// snap, plus CSS droplets) → detail view.
 
-export type Tile = {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  rot: number;
-  depth: number;
+type Slot = {
+  // bubble *center* position in viewport percentages
+  cx: number;
+  cy: number;
+  size: number;   // diameter, vmin
+  depth: number;  // mouse-parallax multiplier
 };
 
-export const driftLayout: Tile[] = [
-  { x: 6,  y: 14, w: 22, h: 32, rot: -2.5, depth: 0.4 },
-  { x: 34, y: 8,  w: 26, h: 18, rot:  1.5, depth: 0.7 },
-  { x: 66, y: 18, w: 22, h: 30, rot: -1.0, depth: 0.5 },
-  { x: 8,  y: 56, w: 18, h: 26, rot:  2.0, depth: 0.9 },
-  { x: 30, y: 50, w: 28, h: 38, rot: -1.2, depth: 0.3 },
-  { x: 62, y: 56, w: 18, h: 22, rot:  1.6, depth: 0.8 },
-  { x: 82, y: 60, w: 14, h: 28, rot: -2.4, depth: 0.6 },
+// Centers (previous layout used top-left + size, so cx = x + size/2, cy = y + size/2)
+const SLOTS: Slot[] = [
+  { cx: 18, cy: 28, size: 28, depth: 0.45 },
+  { cx: 47, cy: 15, size: 22, depth: 0.75 },
+  { cx: 79, cy: 33, size: 30, depth: 0.5  },
+  { cx: 16, cy: 66, size: 20, depth: 0.9  },
+  { cx: 49, cy: 67, size: 34, depth: 0.3  },
+  { cx: 80, cy: 68, size: 24, depth: 0.7  },
+  { cx: 93, cy: 39, size: 18, depth: 0.6  },
 ];
 
-export type TileProps = {
-  work: Work;
-  tile: Tile;
-  index: number;
-  offX: number;
-  offY: number;
-  hover: number | null;
-  onHover: (i: number | null) => void;
-  onOpen: () => void;
-};
+const POP_OPEN_DELAY = 220;
 
 export default function DriftBase({ works }: { works: Work[] }) {
   const { mx, my } = useMouse(0.1);
   const [hover, setHover] = useState<number | null>(null);
+  const [poppingIdx, setPoppingIdx] = useState<number | null>(null);
   const [selected, setSelected] = useState<Work | null>(null);
   const [detailIn, setDetailIn] = useState(false);
 
-  const list = works.slice(0, driftLayout.length);
-  const offX = mx - 0.5;
-  const offY = my - 0.5;
+  const list = works.slice(0, SLOTS.length);
 
-  const open = (work: Work) => {
-    setSelected(work);
-    requestAnimationFrame(() => setDetailIn(true));
-  };
-  const close = () => {
+  const bubbles: BubbleSpec[] = list.map((w, i) => ({
+    slug: w.slug,
+    cover: w.cover,
+    cxPct: SLOTS[i].cx,
+    cyPct: SLOTS[i].cy,
+    sizeVmin: SLOTS[i].size,
+    seed: i,
+    depth: SLOTS[i].depth,
+  }));
+
+  function pop(idx: number, work: Work) {
+    if (poppingIdx !== null) return;
+    setPoppingIdx(idx);
+    window.setTimeout(() => {
+      setSelected(work);
+      requestAnimationFrame(() => setDetailIn(true));
+    }, POP_OPEN_DELAY);
+  }
+
+  function close() {
     setDetailIn(false);
-    window.setTimeout(() => setSelected(null), 380);
-  };
+    window.setTimeout(() => {
+      setSelected(null);
+      setPoppingIdx(null);
+    }, 380);
+  }
 
   useEffect(() => {
     if (!selected) return;
@@ -66,21 +76,131 @@ export default function DriftBase({ works }: { works: Work[] }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selected]);
 
+  // The Canvas writes each bubble's true rendered transform into this
+  // ref every frame; a separate rAF applies the transforms to the DOM
+  // wrappers so hitbox + caption track the bubble.
+  const transformsRef = useRef<BubbleTransform[]>([]);
+  const wrapperRefs = useRef<(HTMLDivElement | null)[]>([]);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      for (let i = 0; i < wrapperRefs.current.length; i++) {
+        const el = wrapperRefs.current[i];
+        const tr = transformsRef.current[i];
+        if (el && tr) {
+          el.style.transform = `translate(-50%, -50%) translate(${tr.dx.toFixed(2)}px, ${tr.dy.toFixed(2)}px) scale(${tr.scale.toFixed(3)})`;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   return (
     <div
       style={{
         position: "fixed",
         inset: 0,
         overflow: "hidden",
-        background: "var(--bg, #ece8e0)",
+        background: "var(--bg, #edcdd1)",
         color: "#0b0b0b",
       }}
     >
+      {/* Background warmth + fairy dust */}
       <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
         <WarmthLayer mx={mx} my={my} />
         <FairyAshLayer />
       </div>
 
+      {/* 3D bubble canvas */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none" }}>
+        <BubbleScene
+          bubbles={bubbles}
+          hoverIdx={hover}
+          poppingIdx={poppingIdx}
+          mx={mx}
+          my={my}
+          mode="desktop"
+          transformsRef={transformsRef}
+        />
+      </div>
+
+      {/* Invisible click/hover/keyboard targets, one per bubble */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 3 }}>
+        {list.map((work, i) => {
+          const s = SLOTS[i];
+          return (
+            <div
+              key={work.slug}
+              ref={(el) => {
+                wrapperRefs.current[i] = el;
+              }}
+              style={{
+                position: "absolute",
+                left: `${s.cx}%`,
+                top: `${s.cy}%`,
+                width: `${s.size}vmin`,
+                height: `${s.size}vmin`,
+                transform: "translate(-50%, -50%)",
+                transformOrigin: "center",
+                willChange: "transform",
+                pointerEvents: poppingIdx !== null ? "none" : "auto",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => pop(i, work)}
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover((h) => (h === i ? null : h))}
+                aria-label={`${work.title} öffnen`}
+                disabled={poppingIdx !== null}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  padding: 0,
+                  margin: 0,
+                  border: 0,
+                  background: "transparent",
+                  borderRadius: "50%",
+                  cursor: poppingIdx !== null ? "default" : "pointer",
+                  opacity: 0,
+                }}
+              />
+              {/* Hover caption — sits above the bubble, fades in on hover */}
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "flex-end",
+                  justifyContent: "center",
+                  fontFamily: "var(--mono)",
+                  fontSize: 11,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: "#fff",
+                  mixBlendMode: "difference",
+                  opacity: hover === i && poppingIdx === null ? 1 : 0,
+                  transition: "opacity 0.3s ease",
+                  pointerEvents: "none",
+                  textAlign: "center",
+                  padding: "0 8% 14%",
+                }}
+              >
+                {work.title} · {work.year}
+              </div>
+              {/* Droplets when popping */}
+              {poppingIdx === i && <PopDroplets />}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Header + footer text overlays */}
       <header
         style={{
           position: "absolute",
@@ -121,20 +241,6 @@ export default function DriftBase({ works }: { works: Work[] }) {
         </div>
       </header>
 
-      {list.map((work, i) => (
-        <WarmthTile
-          key={work.slug}
-          work={work}
-          tile={driftLayout[i]}
-          index={i}
-          offX={offX}
-          offY={offY}
-          hover={hover}
-          onHover={setHover}
-          onOpen={() => open(work)}
-        />
-      ))}
-
       <p
         style={{
           position: "absolute",
@@ -152,7 +258,7 @@ export default function DriftBase({ works }: { works: Work[] }) {
           margin: 0,
         }}
       >
-        Eine driftende Sammlung — bewege den Mauszeiger, die Bilder folgen mit unterschiedlicher Tiefe.
+        Eine driftende Sammlung — klick eine Blase, sie platzt.
       </p>
 
       {selected && (
@@ -163,7 +269,7 @@ export default function DriftBase({ works }: { works: Work[] }) {
             zIndex: 20,
             opacity: detailIn ? 1 : 0,
             transform: detailIn ? "scale(1)" : "scale(1.015)",
-            transition: "opacity 0.42s ease, transform 0.42s ease",
+            transition: "opacity 0.5s ease, transform 0.5s ease",
           }}
         >
           <DetailView work={selected} onClose={close} />

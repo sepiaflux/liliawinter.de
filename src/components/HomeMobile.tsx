@@ -1,25 +1,87 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Work } from "../data/works";
 import { WarmthLayer } from "./shared/WarmthLayer";
 import DetailView from "./shared/DetailView";
+import BubbleScene, {
+  type BubbleSpec,
+  type BubbleTransform,
+} from "./shared/BubbleScene";
+import PopDroplets from "./shared/PopDroplets";
 
-// Mobile homepage: stacked vertical scroll of tiles. No parallax, no
-// 3D tilt, no particles — clean and fast on touch devices.
+// Mobile homepage: a vertical scrolling column of 3D soap bubbles. The
+// bubbles themselves live in a single fixed-position WebGL canvas that
+// covers the viewport; invisible DOM placeholders scroll normally and
+// drive the bubbles' on-screen positions.
 
-const TILE_ROTATIONS = [-1.8, 1.4, -1.0, 1.6, -1.2, 1.8, -1.6];
+const OFFSETS = [0, -4, 3, -2, 4, -3, 2];          // horizontal sway, % of viewport width
+const SIZES_VW = [78, 70, 82, 66, 78, 72, 64];     // diameter, vw
+const POP_OPEN_DELAY = 220;
 
 export default function HomeMobile({ works }: { works: Work[] }) {
   const [selected, setSelected] = useState<Work | null>(null);
   const [detailIn, setDetailIn] = useState(false);
+  const [poppingIdx, setPoppingIdx] = useState<number | null>(null);
+  const [bubbles, setBubbles] = useState<BubbleSpec[]>([]);
+  const placeholderRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const innerRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const transformsRef = useRef<BubbleTransform[]>([]);
 
-  const open = (work: Work) => {
-    setSelected(work);
-    requestAnimationFrame(() => setDetailIn(true));
-  };
-  const close = () => {
+  // Measure each placeholder's center (in viewport %) and feed the scene.
+  function measure() {
+    const out: BubbleSpec[] = [];
+    for (let i = 0; i < works.length; i++) {
+      const el = placeholderRefs.current[i];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      out.push({
+        slug: works[i].slug,
+        cover: works[i].cover,
+        cxPct: (cx / window.innerWidth) * 100,
+        cyPct: (cy / window.innerHeight) * 100,
+        sizeVw: SIZES_VW[i % SIZES_VW.length],
+        seed: i,
+        depth: 0,
+        driftAmpFactor: 0.22,
+      });
+    }
+    setBubbles(out);
+  }
+
+  useLayoutEffect(() => {
+    measure();
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(measure);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [works]);
+
+  function pop(idx: number, work: Work) {
+    if (poppingIdx !== null) return;
+    setPoppingIdx(idx);
+    window.setTimeout(() => {
+      setSelected(work);
+      requestAnimationFrame(() => setDetailIn(true));
+    }, POP_OPEN_DELAY);
+  }
+
+  function close() {
     setDetailIn(false);
-    window.setTimeout(() => setSelected(null), 380);
-  };
+    window.setTimeout(() => {
+      setSelected(null);
+      setPoppingIdx(null);
+    }, 380);
+  }
 
   useEffect(() => {
     if (!selected) return;
@@ -33,8 +95,28 @@ export default function HomeMobile({ works }: { works: Work[] }) {
     if (!selected) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [selected]);
+
+  // rAF sync: apply each bubble's true rendered transform to its inner
+  // wrapper so hitbox + droplets follow the bubble's drift exactly.
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      for (let i = 0; i < innerRefs.current.length; i++) {
+        const el = innerRefs.current[i];
+        const tr = transformsRef.current[i];
+        if (el && tr) {
+          el.style.transform = `translate(${tr.dx.toFixed(2)}px, ${tr.dy.toFixed(2)}px) scale(${tr.scale.toFixed(3)})`;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   return (
     <div
@@ -42,19 +124,32 @@ export default function HomeMobile({ works }: { works: Work[] }) {
         position: "relative",
         width: "100%",
         minHeight: "100vh",
-        background: "var(--bg, #ece8e0)",
+        background: "var(--bg, #edcdd1)",
         color: "#0b0b0b",
       }}
     >
-      {/* Subtle warm wash behind everything */}
       <div style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}>
         <WarmthLayer mx={0.5} my={0.4} />
+      </div>
+
+      {/* 3D bubble canvas — fixed to viewport; positions are driven by the
+          scrolling placeholders below. */}
+      <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none" }}>
+        <BubbleScene
+          bubbles={bubbles}
+          hoverIdx={null}
+          poppingIdx={poppingIdx}
+          mx={0.5}
+          my={0.5}
+          mode="mobile"
+          transformsRef={transformsRef}
+        />
       </div>
 
       <header
         style={{
           position: "relative",
-          zIndex: 2,
+          zIndex: 4,
           padding: "32px 24px 24px",
           display: "flex",
           justifyContent: "space-between",
@@ -92,27 +187,76 @@ export default function HomeMobile({ works }: { works: Work[] }) {
       <main
         style={{
           position: "relative",
-          zIndex: 1,
-          padding: "12px 24px 80px",
+          zIndex: 3,
+          padding: "24px 0 80px",
           display: "flex",
           flexDirection: "column",
-          gap: 28,
+          alignItems: "center",
+          gap: 24,
         }}
       >
-        {works.map((work, i) => (
-          <MobileTile
-            key={work.slug}
-            work={work}
-            rotation={TILE_ROTATIONS[i % TILE_ROTATIONS.length]}
-            onOpen={() => open(work)}
-          />
-        ))}
+        {works.map((work, i) => {
+          const size = SIZES_VW[i % SIZES_VW.length];
+          const offset = OFFSETS[i % OFFSETS.length];
+          return (
+            // Outer = layout + sway. The Canvas measures this to know
+            // where the bubble should sit, so it must NOT move with the
+            // per-frame drift transform.
+            <div
+              key={work.slug}
+              ref={(el) => {
+                placeholderRefs.current[i] = el;
+              }}
+              style={{
+                position: "relative",
+                width: `${size}vw`,
+                height: `${size}vw`,
+                transform: `translateX(${offset}vw)`,
+                pointerEvents: poppingIdx !== null ? "none" : "auto",
+              }}
+            >
+              {/* Inner = the per-frame transform target (drift + scale) */}
+              <div
+                ref={(el) => {
+                  innerRefs.current[i] = el;
+                }}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  willChange: "transform",
+                  transformOrigin: "center",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => pop(i, work)}
+                  aria-label={`${work.title} öffnen`}
+                  disabled={poppingIdx !== null}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    padding: 0,
+                    margin: 0,
+                    border: 0,
+                    background: "transparent",
+                    borderRadius: "50%",
+                    cursor: poppingIdx !== null ? "default" : "pointer",
+                    opacity: 0,
+                  }}
+                />
+                {poppingIdx === i && <PopDroplets />}
+              </div>
+            </div>
+          );
+        })}
       </main>
 
       <footer
         style={{
           position: "relative",
-          zIndex: 2,
+          zIndex: 4,
           padding: "20px 24px 32px",
           fontFamily: "var(--fraunces)",
           fontStyle: "italic",
@@ -134,104 +278,12 @@ export default function HomeMobile({ works }: { works: Work[] }) {
             zIndex: 20,
             opacity: detailIn ? 1 : 0,
             transform: detailIn ? "translateY(0)" : "translateY(12px)",
-            transition: "opacity 0.42s ease, transform 0.42s ease",
+            transition: "opacity 0.5s ease, transform 0.5s ease",
           }}
         >
           <DetailView work={selected} onClose={close} />
         </div>
       )}
     </div>
-  );
-}
-
-function MobileTile({
-  work,
-  rotation,
-  onOpen,
-}: {
-  work: Work;
-  rotation: number;
-  onOpen: () => void;
-}) {
-  const ref = useRef<HTMLButtonElement>(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !("IntersectionObserver" in window)) {
-      setVisible(true);
-      return;
-    }
-    const obs = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            setVisible(true);
-            obs.unobserve(el);
-          }
-        }
-      },
-      { rootMargin: "0px 0px -10% 0px", threshold: 0.05 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onOpen}
-      aria-label={`${work.title} öffnen`}
-      style={{
-        position: "relative",
-        width: "100%",
-        aspectRatio: "4 / 5",
-        padding: 0,
-        background: "none",
-        border: 0,
-        color: "inherit",
-        cursor: "pointer",
-        overflow: "hidden",
-        boxShadow: visible
-          ? "0 18px 50px rgba(0,0,0,0.16)"
-          : "0 6px 20px rgba(0,0,0,0.08)",
-        transform: `rotate(${rotation}deg) translateY(${visible ? 0 : 14}px) scale(${visible ? 1 : 0.98})`,
-        opacity: visible ? 1 : 0,
-        transition:
-          "transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.7s ease, box-shadow 0.5s ease",
-        willChange: "transform, opacity",
-      }}
-    >
-      <img
-        src={work.cover}
-        alt={work.title}
-        loading="lazy"
-        draggable={false}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          display: "block",
-          userSelect: "none",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          left: 14,
-          bottom: 12,
-          fontFamily: "var(--mono)",
-          fontSize: 10,
-          letterSpacing: "0.18em",
-          textTransform: "uppercase",
-          color: "#fff",
-          mixBlendMode: "difference",
-          pointerEvents: "none",
-        }}
-      >
-        {work.title} · {work.year}
-      </div>
-    </button>
   );
 }
