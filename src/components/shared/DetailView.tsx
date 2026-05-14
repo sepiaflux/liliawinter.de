@@ -8,9 +8,23 @@ type Props = {
   theme?: "light" | "dark";
 };
 
-// Single-screen detail view on desktop; scrollable column on mobile.
-// Clicking any image opens a fullscreen lightbox to flip through all
-// images with arrow keys / on-screen arrows.
+// Layout:
+//   ┌─────────────────────────────────────┐
+//   │ ← zurück            Lilia Winter    │ ← sticky top bar (out of scroll)
+//   ├─────────────────────────────────────┤
+//   │  ┌─────────┐  category · year       │
+//   │  │  HERO   │  Title (large serif)   │
+//   │  │ (native │  ──                    │ ← single scroll container
+//   │  │ aspect) │  description italic    │
+//   │  └─────────┘                        │
+//   │  remaining images, vertical (mobile)│
+//   │  or 2-column grid (desktop)         │
+//   │  mail@liliawinter.de   Berlin · YYYY│ ← footer at end of content
+//   └─────────────────────────────────────┘
+//
+// Native aspect on all images (no 4/5 crop). One vertical scroll container,
+// safe-area aware padding, overscroll-behavior: contain so the modal
+// doesn't bleed into the page underneath. Lightbox unchanged.
 export default function DetailView({ work, onClose, theme = "light" }: Props) {
   const mobile = useIsMobile();
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
@@ -18,8 +32,6 @@ export default function DetailView({ work, onClose, theme = "light" }: Props) {
   const total = work.images.length;
   const wrap = (i: number) => ((i % total) + total) % total;
 
-  // Single keydown handler: lightbox keys win when it's open; ESC closes
-  // the lightbox first, then the detail view on a second press.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (lightboxIdx !== null) {
@@ -39,9 +51,6 @@ export default function DetailView({ work, onClose, theme = "light" }: Props) {
   const subtle = theme === "light" ? "#6b6760" : "#9b968d";
   const rule = theme === "light" ? "rgba(11,11,11,0.12)" : "rgba(243,241,236,0.15)";
 
-  const hero = work.images[0] ?? work.cover;
-  const thumbs = work.images.slice(1, 5);
-
   return (
     <div
       style={{
@@ -49,20 +58,21 @@ export default function DetailView({ work, onClose, theme = "light" }: Props) {
         inset: 0,
         background: bg,
         color: ink,
-        display: "grid",
-        gridTemplateRows: mobile ? "auto auto auto auto auto" : "auto 1fr auto auto",
-        padding: mobile ? "20px 24px 32px" : "28px 40px",
-        gap: mobile ? "4vh" : "3vh",
-        boxSizing: "border-box",
-        overflowY: mobile ? "auto" : "hidden",
-        WebkitOverflowScrolling: "touch",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
       }}
     >
       <header
         style={{
+          flexShrink: 0,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          padding: "max(16px, env(safe-area-inset-top, 0px)) 24px 14px",
+          background: bg,
+          borderBottom: `1px solid ${rule}`,
+          zIndex: 2,
         }}
       >
         <button
@@ -76,7 +86,7 @@ export default function DetailView({ work, onClose, theme = "light" }: Props) {
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             cursor: "pointer",
-            padding: 0,
+            padding: "6px 0",
             display: "flex",
             alignItems: "center",
             gap: 10,
@@ -97,124 +107,133 @@ export default function DetailView({ work, onClose, theme = "light" }: Props) {
         </div>
       </header>
 
-      <main
+      <div
         style={{
-          display: "grid",
-          gridTemplateColumns: mobile ? "1fr" : "minmax(0, 1.35fr) minmax(0, 1fr)",
-          gap: mobile ? "3vh" : "5vw",
-          alignItems: mobile ? "start" : "stretch",
-          minHeight: 0,
+          flex: 1,
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+          WebkitOverflowScrolling: "touch",
         }}
       >
-        <ImageButton
-          src={hero}
-          alt={work.title}
-          index={0}
-          total={work.images.length}
-          onOpen={() => setLightboxIdx(0)}
-          mobile={mobile}
-          theme={theme}
-          eager
-        />
-
-        <section
+        <article
           style={{
+            padding: mobile
+              ? "24px 20px 32px"
+              : "40px 48px 64px",
+            paddingBottom: `max(${mobile ? 32 : 64}px, env(safe-area-inset-bottom, 0px))`,
+            maxWidth: mobile ? undefined : 1280,
+            margin: mobile ? undefined : "0 auto",
             display: "flex",
             flexDirection: "column",
-            justifyContent: mobile ? "flex-start" : "center",
-            gap: mobile ? 16 : 24,
-            paddingRight: mobile ? 0 : "1vw",
+            gap: mobile ? 28 : 48,
           }}
         >
-          <div
+          {/* Hero + meta block — stacked on mobile, side-by-side on desktop */}
+          <section
             style={{
+              display: "grid",
+              gridTemplateColumns: mobile ? "1fr" : "minmax(0, 1.15fr) minmax(0, 1fr)",
+              gap: mobile ? 22 : 48,
+              alignItems: mobile ? "stretch" : "center",
+            }}
+          >
+            <ImageButton
+              src={work.images[0] ?? work.cover}
+              alt={work.title}
+              index={0}
+              total={total}
+              onOpen={() => setLightboxIdx(0)}
+              theme={theme}
+              eager
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 10,
+                  letterSpacing: "0.22em",
+                  textTransform: "uppercase",
+                  color: subtle,
+                }}
+              >
+                {work.category} · {work.year}
+              </div>
+              <h1
+                style={{
+                  fontFamily: "var(--serif)",
+                  fontWeight: 400,
+                  fontSize: mobile
+                    ? "clamp(40px, 11vw, 60px)"
+                    : "clamp(56px, 6vw, 112px)",
+                  lineHeight: 0.95,
+                  letterSpacing: "-0.022em",
+                  margin: 0,
+                  wordBreak: "break-word",
+                }}
+              >
+                {work.title}
+              </h1>
+              <div style={{ width: 56, height: 1, background: ink, opacity: 0.4 }} />
+              <p
+                style={{
+                  fontFamily: "var(--fraunces)",
+                  fontStyle: "italic",
+                  fontSize: mobile ? 16 : "clamp(15px, 1.18vw, 20px)",
+                  lineHeight: 1.55,
+                  margin: 0,
+                  maxWidth: mobile ? undefined : "38ch",
+                  color: ink,
+                }}
+              >
+                {work.description}
+              </p>
+            </div>
+          </section>
+
+          {total > 1 && (
+            <section
+              style={{
+                display: "grid",
+                gridTemplateColumns: mobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
+                gap: mobile ? 14 : 20,
+              }}
+            >
+              {work.images.slice(1).map((src, i) => (
+                <ImageButton
+                  key={src}
+                  src={src}
+                  alt={`${work.title} — ${i + 2}`}
+                  index={i + 1}
+                  total={total}
+                  onOpen={() => setLightboxIdx(i + 1)}
+                  theme={theme}
+                />
+              ))}
+            </section>
+          )}
+
+          <footer
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
               fontFamily: "var(--mono)",
               fontSize: 10,
               letterSpacing: "0.22em",
               textTransform: "uppercase",
               color: subtle,
+              borderTop: `1px solid ${rule}`,
+              paddingTop: 14,
+              marginTop: 8,
+              flexWrap: "wrap",
+              gap: 8,
             }}
           >
-            {work.category}  ·  {work.year}
-          </div>
-          <h1
-            style={{
-              fontFamily: "var(--serif)",
-              fontWeight: 400,
-              fontSize: mobile ? "clamp(42px, 12vw, 64px)" : "clamp(56px, 6.8vw, 124px)",
-              lineHeight: 0.95,
-              letterSpacing: "-0.022em",
-              margin: 0,
-            }}
-          >
-            {work.title}
-          </h1>
-          <div style={{ width: 56, height: 1, background: ink, opacity: 0.4 }} />
-          <p
-            style={{
-              fontFamily: "var(--fraunces)",
-              fontStyle: "italic",
-              fontSize: mobile ? 16 : "clamp(15px, 1.18vw, 20px)",
-              lineHeight: 1.55,
-              margin: 0,
-              maxWidth: "34ch",
-              color: ink,
-            }}
-          >
-            {work.description}
-          </p>
-        </section>
-      </main>
-
-      {thumbs.length > 0 && (
-        <section
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            flexWrap: "nowrap",
-            gap: 10,
-            height: mobile ? 130 : "min(22vh, 200px)",
-            overflowX: "auto",
-            overflowY: "hidden",
-            scrollbarWidth: "none",
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-          {thumbs.map((src, i) => (
-            <ImageButton
-              key={src}
-              src={src}
-              alt={`${work.title} — ${i + 2}`}
-              index={i + 1}
-              total={work.images.length}
-              onOpen={() => setLightboxIdx(i + 1)}
-              mobile={mobile}
-              theme={theme}
-              isThumb
-            />
-          ))}
-        </section>
-      )}
-
-      <footer
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-end",
-          fontFamily: "var(--mono)",
-          fontSize: 10,
-          letterSpacing: "0.22em",
-          textTransform: "uppercase",
-          color: subtle,
-          borderTop: `1px solid ${rule}`,
-          paddingTop: 14,
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        <div>mail@liliawinter.de</div>
-        <div>Berlin · {new Date().getFullYear()}</div>
-      </footer>
+            <div>mail@liliawinter.de</div>
+            <div>Berlin · {new Date().getFullYear()}</div>
+          </footer>
+        </article>
+      </div>
 
       {lightboxIdx !== null && (
         <Lightbox
@@ -236,9 +255,7 @@ function ImageButton({
   index,
   total,
   onOpen,
-  mobile,
   theme,
-  isThumb,
   eager,
 }: {
   src: string;
@@ -246,9 +263,7 @@ function ImageButton({
   index: number;
   total: number;
   onOpen: () => void;
-  mobile: boolean;
   theme: "light" | "dark";
-  isThumb?: boolean;
   eager?: boolean;
 }) {
   return (
@@ -264,11 +279,7 @@ function ImageButton({
         color: "inherit",
         cursor: "zoom-in",
         margin: 0,
-        minHeight: 0,
-        flex: isThumb ? "0 0 auto" : undefined,
-        width: isThumb ? "auto" : "100%",
-        height: isThumb ? "100%" : mobile ? undefined : "100%",
-        aspectRatio: !isThumb && mobile ? "4 / 5" : undefined,
+        width: "100%",
         display: "block",
         overflow: "hidden",
       }}
@@ -277,30 +288,26 @@ function ImageButton({
         src={src}
         alt={alt}
         loading={eager ? "eager" : "lazy"}
+        decoding={eager ? "sync" : "async"}
         draggable={false}
         style={{
-          width: isThumb ? "auto" : "100%",
-          height: "100%",
-          objectFit: isThumb ? "contain" : "cover",
+          width: "100%",
+          height: "auto",
           display: "block",
           userSelect: "none",
           boxShadow:
             theme === "light"
-              ? isThumb
-                ? "0 12px 28px rgba(0,0,0,0.10)"
-                : "0 30px 60px rgba(0,0,0,0.15)"
-              : isThumb
-              ? "0 12px 28px rgba(0,0,0,0.45)"
-              : "0 30px 60px rgba(0,0,0,0.55)",
+              ? "0 18px 44px rgba(0,0,0,0.12)"
+              : "0 18px 44px rgba(0,0,0,0.5)",
         }}
       />
       <span
         style={{
           position: "absolute",
-          left: isThumb ? 10 : 14,
-          bottom: isThumb ? 8 : 12,
+          left: 12,
+          bottom: 12,
           fontFamily: "var(--mono)",
-          fontSize: isThumb ? 9 : 10,
+          fontSize: 10,
           letterSpacing: "0.18em",
           textTransform: "uppercase",
           color: "#fff",
@@ -329,11 +336,12 @@ function Lightbox({
   onNext: () => void;
   onClose: () => void;
 }) {
-  // Lock body scroll while open.
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, []);
 
   return (
@@ -351,19 +359,22 @@ function Lightbox({
         placeItems: "center",
         cursor: "zoom-out",
         animation: "lw-fade-in 0.22s ease-out",
+        padding:
+          "max(20px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) max(20px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
       }}
     >
-      <style>{`
-        @keyframes lw-fade-in { from { opacity: 0; } to { opacity: 1; } }
-      `}</style>
+      <style>{`@keyframes lw-fade-in { from { opacity: 0; } to { opacity: 1; } }`}</style>
 
       <button
-        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
         aria-label="Schließen"
         style={{
           position: "absolute",
-          top: 20,
-          right: 24,
+          top: "max(14px, env(safe-area-inset-top, 0px))",
+          right: "max(18px, env(safe-area-inset-right, 0px))",
           background: "transparent",
           border: 0,
           color: "#f3f1ec",
@@ -382,8 +393,8 @@ function Lightbox({
       <div
         style={{
           position: "absolute",
-          top: 22,
-          left: 24,
+          top: "max(18px, env(safe-area-inset-top, 0px))",
+          left: "max(20px, env(safe-area-inset-left, 0px))",
           fontFamily: "var(--mono)",
           fontSize: 10,
           letterSpacing: "0.22em",
@@ -412,14 +423,20 @@ function Lightbox({
       />
 
       <button
-        onClick={(e) => { e.stopPropagation(); onPrev(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onPrev();
+        }}
         aria-label="Vorheriges Bild"
         style={navArrow("left")}
       >
         ←
       </button>
       <button
-        onClick={(e) => { e.stopPropagation(); onNext(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onNext();
+        }}
         aria-label="Nächstes Bild"
         style={navArrow("right")}
       >

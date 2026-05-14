@@ -1,0 +1,20 @@
+---
+import Base from "../../layouts/Base.astro";
+import Home from "../../components/Home.tsx";
+import { works } from "../../data/works";
+
+export function getStaticPaths() {
+  return works.map((w) => ({
+    params: { slug: w.slug },
+    props: { work: w },
+  }));
+}
+
+const { work } = Astro.props;
+const pageTitle = `${work.title} — Lilia Winter`;
+const pageDescription = work.description;
+---
+
+<Base title={pageTitle} description={pageDescription} ogImage={work.cover}>
+  <Home client:only="react" works={works} initialSlug={work.slug} />
+</Base>

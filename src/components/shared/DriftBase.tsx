@@ -39,7 +39,13 @@ const SLOTS: Slot[] = [
 
 const POP_OPEN_DELAY = 380;
 
-export default function DriftBase({ works }: { works: Work[] }) {
+export default function DriftBase({
+  works,
+  initialSlug,
+}: {
+  works: Work[];
+  initialSlug?: string;
+}) {
   const { mx, my } = useMouse(0.1);
   const [hover, setHover] = useState<number | null>(null);
   const [poppingIdx, setPoppingIdx] = useState<number | null>(null);
@@ -87,6 +93,9 @@ export default function DriftBase({ works }: { works: Work[] }) {
     window.setTimeout(() => {
       setSelected(work);
       requestAnimationFrame(() => setDetailIn(true));
+      if (typeof window !== "undefined" && window.location.pathname !== `/work/${work.slug}`) {
+        window.history.pushState(null, "", `/work/${work.slug}`);
+      }
     }, POP_OPEN_DELAY);
   }
 
@@ -96,7 +105,47 @@ export default function DriftBase({ works }: { works: Work[] }) {
       setSelected(null);
       setPoppingIdx(null);
     }, 380);
+    if (typeof window !== "undefined" && window.location.pathname !== "/") {
+      window.history.pushState(null, "", "/");
+    }
   }
+
+  // Direct load at /work/[slug] (or via Astro page navigation) — show the
+  // matching detail immediately, no pop animation, and remember the
+  // popped bubble's index so it can re-spawn when the user closes.
+  useEffect(() => {
+    if (!initialSlug) return;
+    const idx = list.findIndex((w) => w.slug === initialSlug);
+    if (idx < 0) return;
+    setSelected(list[idx]);
+    setPoppingIdx(idx);
+    setDetailIn(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Browser back/forward → react to URL changes without pushing new
+  // history entries (the browser already did).
+  useEffect(() => {
+    const onPop = () => {
+      const m = window.location.pathname.match(/^\/work\/([^/]+)/);
+      if (m) {
+        const slug = decodeURIComponent(m[1]);
+        const idx = list.findIndex((w) => w.slug === slug);
+        if (idx < 0) return;
+        setSelected(list[idx]);
+        setPoppingIdx(idx);
+        setDetailIn(true);
+      } else {
+        setDetailIn(false);
+        window.setTimeout(() => {
+          setSelected(null);
+          setPoppingIdx(null);
+        }, 380);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [list]);
 
   useEffect(() => {
     if (!selected) return;

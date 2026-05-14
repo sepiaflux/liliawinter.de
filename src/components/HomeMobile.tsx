@@ -33,7 +33,13 @@ const LAYOUT: MobileSlot[] = [
 ];
 const POP_OPEN_DELAY = 380;
 
-export default function HomeMobile({ works }: { works: Work[] }) {
+export default function HomeMobile({
+  works,
+  initialSlug,
+}: {
+  works: Work[];
+  initialSlug?: string;
+}) {
   const [selected, setSelected] = useState<Work | null>(null);
   const [detailIn, setDetailIn] = useState(false);
   const [poppingIdx, setPoppingIdx] = useState<number | null>(null);
@@ -121,6 +127,9 @@ export default function HomeMobile({ works }: { works: Work[] }) {
     window.setTimeout(() => {
       setSelected(work);
       requestAnimationFrame(() => setDetailIn(true));
+      if (typeof window !== "undefined" && window.location.pathname !== `/work/${work.slug}`) {
+        window.history.pushState(null, "", `/work/${work.slug}`);
+      }
     }, POP_OPEN_DELAY);
   }
 
@@ -130,7 +139,44 @@ export default function HomeMobile({ works }: { works: Work[] }) {
       setSelected(null);
       setPoppingIdx(null);
     }, 380);
+    if (typeof window !== "undefined" && window.location.pathname !== "/") {
+      window.history.pushState(null, "", "/");
+    }
   }
+
+  // Direct load at /work/[slug] — show that work's detail immediately
+  // and mark its bubble as popped so it re-spawns on close.
+  useEffect(() => {
+    if (!initialSlug) return;
+    const idx = works.findIndex((w) => w.slug === initialSlug);
+    if (idx < 0) return;
+    setSelected(works[idx]);
+    setPoppingIdx(idx);
+    setDetailIn(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => {
+      const m = window.location.pathname.match(/^\/work\/([^/]+)/);
+      if (m) {
+        const slug = decodeURIComponent(m[1]);
+        const idx = works.findIndex((w) => w.slug === slug);
+        if (idx < 0) return;
+        setSelected(works[idx]);
+        setPoppingIdx(idx);
+        setDetailIn(true);
+      } else {
+        setDetailIn(false);
+        window.setTimeout(() => {
+          setSelected(null);
+          setPoppingIdx(null);
+        }, 380);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [works]);
 
   useEffect(() => {
     if (!selected) return;
@@ -330,8 +376,8 @@ export default function HomeMobile({ works }: { works: Work[] }) {
                     pointerEvents: "none",
                     textAlign: "center",
                     padding: "0 10% 12%",
-                    opacity: poppingIdx === i ? 0 : 1,
-                    transition: "opacity 0.2s ease",
+                    opacity: selected !== null || poppingIdx === i ? 0 : 1,
+                    transition: "opacity 0.25s ease",
                   }}
                 >
                   {work.title} · {work.year}

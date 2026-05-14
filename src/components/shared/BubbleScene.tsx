@@ -33,6 +33,9 @@ const COVER_FRAG = /* glsl */ `
       sampleUv = vec2(vUv.x, 0.5 + (vUv.y - 0.5) * imageAspect);
     }
     float r = distance(vUv, vec2(0.5)) * 2.0;
+    // Smooth rim fade — the photo fades into the BG-pink back shell
+    // (not into empty pixels), so the transition reads as photo →
+    // BG-pink on every photo regardless of brightness.
     float alpha = 1.0 - smoothstep(fadeStart, fadeEnd, r);
     vec4 tex = texture2D(map, sampleUv);
     gl_FragColor = vec4(tex.rgb * dim, tex.a * alpha);
@@ -345,7 +348,7 @@ function Scene({
       // Animate envMapIntensity with the same spring → the highlight on
       // the bubble fades up on hover and overshoots like the scale.
       const mat = matRefs.current[i];
-      if (mat) mat.envMapIntensity = 3.5 * lightMul.current[i];
+      if (mat) mat.envMapIntensity = 1.8 * lightMul.current[i];
 
       // Publish position + scale so DOM hitboxes/captions can follow.
       if (transformsRef && transformsRef.current) {
@@ -376,11 +379,12 @@ function Scene({
   return (
     <>
       <ambientLight intensity={0.4} />
-      {/* HDR env preset — drives the iridescent rim and clearcoat
-          highlights. 256 keeps the specular highlight crisp (iridescence
-          itself is low-frequency, but clearcoat needs sharper reflections
-          to look like wet film). */}
-      <Environment preset="sunset" resolution={256} background={false} />
+      {/* Poly Haven rogland_clear_night — the night-sky HDR you picked. */}
+      <Environment
+        files="/hdr/rogland_clear_night_1k.hdr"
+        resolution={128}
+        background={false}
+      />
 
       {bubbles.map((b, i) => (
         <Bubble3D
@@ -434,7 +438,11 @@ function Bubble3D({
     }
     return {
       map: { value: cover ?? null },
-      fadeStart: { value: 0.6 },
+      // Long, soft fade. The photo starts dissolving at 65% of the
+      // disc radius — but with the shell behind it at low opacity
+      // (see meshPhysicalMaterial.opacity) the rim is *subtle BG-pink*
+      // rather than a saturated pink overlay.
+      fadeStart: { value: 0.65 },
       fadeEnd: { value: 1.0 },
       dim: { value: 1.0 },
       imageAspect: { value: aspect },
@@ -443,38 +451,25 @@ function Bubble3D({
 
   return (
     <group ref={attachGroup}>
-      {/* Soap-film shell — iridescence + clearcoat carry the entire
-          look. We dropped transmission (which forced a full extra scene
-          render per bubble per frame) since the cover disc sits in
-          front anyway; the bubble's only see-through area is the rim,
-          handled by alpha + Fresnel-ish opacity. */}
+      {/* BACK SHELL — solid BG-pink, opaque. Sits behind everything;
+          guarantees that the bubble silhouette has BG-pink pixels on
+          the canvas, so the rim composites onto the page WITHOUT
+          subtracting brightness. Also means the photo above fades
+          gracefully to BG-pink instead of into nothing — which is what
+          made the fade work nicely on dark photos before. */}
       <mesh renderOrder={0}>
         <sphereGeometry args={[radiusPx, 48, 32]} />
-        <meshPhysicalMaterial
-          ref={attachMat}
-          roughness={0}
-          metalness={0}
-          ior={1.33}
-          reflectivity={0.5}
-          iridescence={1}
-          iridescenceIOR={1.3}
-          iridescenceThicknessRange={[100, 400]}
-          clearcoat={1}
-          clearcoatRoughness={0}
-          envMapIntensity={3.5}
-          color="#ffffff"
-          transparent
-          opacity={0.8}
+        <meshBasicMaterial
+          color="#edcdd1"
+          transparent={false}
           depthWrite={false}
           side={THREE.FrontSide}
         />
       </mesh>
 
-      {/* Cover disc — sits IN FRONT of the bubble and fades to
-          transparent at the rim so the iridescent shell stays visible
-          at the edges. */}
+      {/* COVER DISC — photo with a smooth alpha fade toward the rim. */}
       {cover && (
-        <mesh position={[0, 0, radiusPx * 1.02]} renderOrder={1}>
+        <mesh position={[0, 0, radiusPx * 0.01]} renderOrder={1}>
           <circleGeometry args={[radiusPx * 0.99, 48]} />
           <shaderMaterial
             ref={attachInnerMat}
@@ -486,6 +481,34 @@ function Bubble3D({
           />
         </mesh>
       )}
+
+      {/* FRONT SHELL — additive reflections only. Dark base color +
+          additive blending means this contributes only the bright
+          highlights (sun glint, iridescent shimmer, env reflection) on
+          top of whatever's underneath. Visible on the photo AND on the
+          fading rim band, without tinting or darkening anything. */}
+      <mesh position={[0, 0, radiusPx * 0.02]} renderOrder={2}>
+        <sphereGeometry args={[radiusPx, 48, 32]} />
+        <meshPhysicalMaterial
+          ref={attachMat}
+          roughness={0}
+          metalness={0}
+          ior={1.33}
+          reflectivity={0.5}
+          iridescence={1}
+          iridescenceIOR={1.3}
+          iridescenceThicknessRange={[100, 400]}
+          clearcoat={0.9}
+          clearcoatRoughness={0.3}
+          envMapIntensity={1.8}
+          color="#0a0608"
+          transparent
+          opacity={0.5}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          side={THREE.FrontSide}
+        />
+      </mesh>
     </group>
   );
 }
