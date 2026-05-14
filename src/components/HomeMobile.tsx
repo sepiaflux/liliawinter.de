@@ -39,17 +39,10 @@ export default function HomeMobile({ works }: { works: Work[] }) {
   const [poppingIdx, setPoppingIdx] = useState<number | null>(null);
   const [bubbles, setBubbles] = useState<BubbleSpec[]>([]);
   const [ready, setReady] = useState(false);
+  const outerRef = useRef<HTMLDivElement>(null);
   const placeholderRefs = useRef<(HTMLDivElement | null)[]>([]);
   const innerRefs = useRef<(HTMLDivElement | null)[]>([]);
   const transformsRef = useRef<BubbleTransform[]>([]);
-  // Scroll handling: instead of pushing scroll through React state
-  // (which causes a re-render per frame and makes bubbles lag visibly
-  // behind native scroll), we keep scroll in a ref and let BubbleScene
-  // read it each frame to shift the camera. baselineScrollY captures
-  // window.scrollY at the moment bubbles were measured; scrollDeltaRef
-  // is the difference since then.
-  const scrollDeltaRef = useRef(0);
-  const baselineScrollYRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,25 +64,31 @@ export default function HomeMobile({ works }: { works: Work[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Measure each placeholder's center (in viewport %) at the *current*
-  // scroll position, then capture that scroll position as the baseline.
-  // After this, scroll is tracked purely via scrollDeltaRef — no
-  // re-measure, no setState.
+  // Measure each placeholder's *page-relative* center (relative to the
+  // outer scroll container, NOT the viewport). The bubble canvas lives
+  // in the same scroll container at the same coordinate space, so the
+  // browser compositor handles scrolling natively — no JS sync, no
+  // iOS-Safari momentum-scroll stutter.
   function measure() {
-    baselineScrollYRef.current = window.scrollY;
-    scrollDeltaRef.current = 0;
+    const outer = outerRef.current;
+    if (!outer) return;
+    const outerRect = outer.getBoundingClientRect();
+    const pageW = outerRect.width;
+    const pageH = outer.scrollHeight;
+    if (pageW <= 0 || pageH <= 0) return;
     const out: BubbleSpec[] = [];
     for (let i = 0; i < works.length; i++) {
       const el = placeholderRefs.current[i];
       if (!el) continue;
       const r = el.getBoundingClientRect();
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
+      // Convert viewport-relative rect → page-relative (outer-container-relative).
+      const cx = r.left - outerRect.left + r.width / 2;
+      const cy = r.top - outerRect.top + r.height / 2;
       out.push({
         slug: works[i].slug,
         cover: works[i].cover,
-        cxPct: (cx / window.innerWidth) * 100,
-        cyPct: (cy / window.innerHeight) * 100,
+        cxPct: (cx / pageW) * 100,
+        cyPct: (cy / pageH) * 100,
         sizeVw: LAYOUT[i % LAYOUT.length].size,
         seed: i,
         depth: 0,
@@ -101,19 +100,16 @@ export default function HomeMobile({ works }: { works: Work[] }) {
 
   useLayoutEffect(() => {
     measure();
-    // Scroll: ref-only update. Synchronous, no React work, no rAF
-    // debounce — BubbleScene reads this directly each frame so there
-    // is zero lag between native scroll and the bubble shift.
-    const onScroll = () => {
-      scrollDeltaRef.current = window.scrollY - baselineScrollYRef.current;
-    };
-    // Resize re-baselines: we re-measure (since layout changes) and
-    // reset scrollDelta to 0.
+    // Only re-measure when layout actually changes (resize, content
+    // height shift from image loads, etc.). Crucially, NOT on scroll —
+    // the canvas scrolls natively with the page so its scene coords
+    // stay valid.
+    const ro = new ResizeObserver(() => measure());
+    if (outerRef.current) ro.observe(outerRef.current);
     const onResize = () => measure();
-    window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize);
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      ro.disconnect();
       window.removeEventListener("resize", onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -173,6 +169,7 @@ export default function HomeMobile({ works }: { works: Work[] }) {
 
   return (
     <div
+      ref={outerRef}
       style={{
         position: "relative",
         width: "100%",
@@ -181,6 +178,8 @@ export default function HomeMobile({ works }: { works: Work[] }) {
         color: "#0b0b0b",
       }}
     >
+      {/* Background ambient stays fixed in viewport — these are mood
+          layers, not content tied to specific places on the page. */}
       <div style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }}>
         <WarmthLayer mx={0.5} my={0.4} />
         <Suspense fallback={null}>
@@ -188,9 +187,14 @@ export default function HomeMobile({ works }: { works: Work[] }) {
         </Suspense>
       </div>
 
-      {/* 3D bubble canvas — fixed to viewport; positions are driven by the
-          scrolling placeholders below. */}
-      <div style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none" }}>
+      {/* 3D bubble canvas — lives in normal scroll flow (absolute inset:0
+          of the page-tall outer container) so the browser compositor
+          scrolls it natively with the rest of the page. This is the only
+          way to avoid iOS-Safari momentum-scroll stutter: JS pauses
+          during scroll, but native compositing does not. Bubble positions
+          are baked into scene coords relative to the page, so no per-frame
+          scroll sync is needed. */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none" }}>
         <Suspense fallback={null}>
           <BubbleScene
             bubbles={bubbles}
@@ -201,7 +205,6 @@ export default function HomeMobile({ works }: { works: Work[] }) {
             mode="mobile"
             transformsRef={transformsRef}
             startInitialSpawn={ready}
-            scrollDeltaRef={scrollDeltaRef}
           />
         </Suspense>
       </div>

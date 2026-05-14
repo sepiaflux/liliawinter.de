@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { Perf } from "r3f-perf";
+import BenchmarkProbe from "./BenchmarkProbe";
 
 // Cover disc shader: stays IN FRONT of the bubble (no refraction) and
 // fades to fully transparent toward the rim — so the iridescent bubble
@@ -79,11 +80,6 @@ type Props = {
   // small stagger. Used to play the intro sequence once assets are
   // preloaded.
   startInitialSpawn?: boolean;
-  // Mobile only: pixels the page has scrolled since the bubbles were
-  // last measured. We shift the orthographic camera by this so the
-  // scene tracks scroll *synchronously* with the DOM, with zero
-  // React re-renders during scroll.
-  scrollDeltaRef?: React.MutableRefObject<number>;
 };
 
 export default function BubbleScene(props: Props) {
@@ -109,7 +105,12 @@ export default function BubbleScene(props: Props) {
     >
       <Suspense fallback={null}>
         <Scene {...props} />
-        {import.meta.env.DEV && <Perf position="top-left" />}
+        {import.meta.env.DEV && (
+          <>
+            <Perf position="top-left" />
+            <BenchmarkProbe />
+          </>
+        )}
       </Suspense>
     </Canvas>
   );
@@ -124,7 +125,6 @@ function Scene({
   mode,
   transformsRef,
   startInitialSpawn,
-  scrollDeltaRef,
 }: Props) {
   const covers = useTexture(bubbles.map((b) => b.cover));
   useEffect(() => {
@@ -139,7 +139,7 @@ function Scene({
   const groupRefs = useRef<(THREE.Group | null)[]>([]);
   const matRefs = useRef<(THREE.MeshPhysicalMaterial | null)[]>([]);
   const innerMatRefs = useRef<(THREE.ShaderMaterial | null)[]>([]);
-  const { size, camera } = useThree();
+  const { size } = useThree();
 
   const layout = useMemo(() => {
     return bubbles.map((b) => {
@@ -173,15 +173,6 @@ function Scene({
     // Skip all per-frame work when the tab is hidden — saves battery
     // and CPU while the user is on another tab.
     if (typeof document !== "undefined" && document.hidden) return;
-
-    // Mobile: shift the ortho camera by -scrollDelta so the scene
-    // tracks page scroll synchronously, with zero React re-renders.
-    // Scene Y is inverted vs CSS Y (positive = up), so a positive
-    // scrollDelta (scrolled down) moves the camera *down*, making the
-    // bubbles appear to scroll *up* in the viewport with the page.
-    if (mode === "mobile" && scrollDeltaRef) {
-      camera.position.y = -scrollDeltaRef.current;
-    }
 
     const t = clock.getElapsedTime();
     const speed = 0.32;
