@@ -43,11 +43,14 @@ const SECTIONS: Section[] = [
 ];
 
 type Slot = { cx: number; cy: number; size: number; depth: number };
-// Desktop: asymmetric arrangement using vmin sizing.
+// Desktop: asymmetric arrangement. Sizes are interpreted by
+// BubbleScene as a percentage of (vw+vh)/2 (the arithmetic mean of the
+// viewport dimensions), so bubbles get bigger on wide monitors and
+// smaller on narrow ones — instead of plateauing at vmin.
 const DESKTOP_SLOTS: Slot[] = [
-  { cx: 26, cy: 52, size: 34, depth: 0.5 },
-  { cx: 52, cy: 32, size: 30, depth: 0.7 },
-  { cx: 74, cy: 60, size: 36, depth: 0.4 },
+  { cx: 26, cy: 52, size: 24, depth: 0.5 },
+  { cx: 52, cy: 32, size: 22, depth: 0.7 },
+  { cx: 74, cy: 60, size: 26, depth: 0.4 },
 ];
 // Mobile: vertical stack of three large bubbles. Sizes are in vw, so a
 // 64vw bubble nearly fills the screen width — gives the title plenty
@@ -71,11 +74,26 @@ export default function SectionBubbles() {
   const SLOTS = mobile ? MOBILE_SLOTS : DESKTOP_SLOTS;
   // Mobile uses sizeVw (% of viewport WIDTH); desktop uses sizeVmin
   // (% of the smaller axis). Wrapper DOM gets a matching CSS unit.
-  const sizeUnit = mobile ? "vw" : "vmin";
+  // Mobile uses sizeVw → plain `Nvw` in CSS. Desktop uses the (vw+vh)/2
+  // mean to match the BubbleScene's new responsive formula.
+  const cssSize = (n: number) =>
+    mobile ? `${n}vw` : `calc((${n}vw + ${n}vh) / 2)`;
   const [hover, setHover] = useState<number | null>(null);
   const [poppingIdx, setPoppingIdx] = useState<number | null>(null);
   const [poppedIdxs, setPoppedIdxs] = useState<Set<number>>(new Set());
   const [ready, setReady] = useState(false);
+  // Section labels (Portfolio / Lebenslauf / Über mich) are positioned
+  // over the bubble wrappers from first paint. Without this flag they
+  // appear on top of the loading veil and pop in before the bubbles
+  // do — the user notices the bare text first. We defer them until the
+  // bubbles have visibly spawned (~600ms after `ready`) and fade them
+  // in smoothly.
+  const [labelsIn, setLabelsIn] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    const t = window.setTimeout(() => setLabelsIn(true), 600);
+    return () => window.clearTimeout(t);
+  }, [ready]);
   const transformsRef = useRef<BubbleTransform[]>([]);
   const wrapperRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -212,8 +230,8 @@ export default function SectionBubbles() {
                 position: "absolute",
                 left: `${slot.cx}%`,
                 top: `${slot.cy}%`,
-                width: `${slot.size}${sizeUnit}`,
-                height: `${slot.size}${sizeUnit}`,
+                width: cssSize(slot.size),
+                height: cssSize(slot.size),
                 transform: "translate(-50%, -50%)",
                 transformOrigin: "center",
                 willChange: "transform",
@@ -252,8 +270,10 @@ export default function SectionBubbles() {
                   justifyContent: "center",
                   pointerEvents: "none",
                   textAlign: "center",
-                  opacity: isPopped ? 0 : 1,
-                  transition: "opacity 0.25s ease",
+                  // Hidden until the bubbles have spawned, and hidden
+                  // again when this bubble pops.
+                  opacity: isPopped || !labelsIn ? 0 : 1,
+                  transition: "opacity 0.55s ease",
                 }}
               >
                 <div
@@ -294,7 +314,7 @@ export default function SectionBubbles() {
           left: 40,
           right: 40,
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: "flex-start",
           alignItems: "flex-start",
           zIndex: 5,
           mixBlendMode: "difference",
@@ -312,40 +332,7 @@ export default function SectionBubbles() {
         >
           Lilia <em style={{ fontStyle: "italic" }}>Winter</em>
         </div>
-        <div
-          style={{
-            fontFamily: "var(--mono)",
-            fontSize: 10,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            textAlign: "right",
-            lineHeight: 1.8,
-          }}
-        >
-          <div>Video · Foto · Installation</div>
-          <div>Berlin · seit 2019</div>
-        </div>
       </header>
-
-      <p
-        style={{
-          position: "absolute",
-          left: 40,
-          bottom: 32,
-          fontFamily: "var(--fraunces)",
-          fontStyle: "italic",
-          fontSize: 16,
-          maxWidth: 320,
-          lineHeight: 1.4,
-          mixBlendMode: "difference",
-          color: "#fff",
-          pointerEvents: "none",
-          zIndex: 5,
-          margin: 0,
-        }}
-      >
-        Eine driftende Sammlung — klick eine Blase, sie platzt.
-      </p>
 
       <div
         aria-hidden={ready}

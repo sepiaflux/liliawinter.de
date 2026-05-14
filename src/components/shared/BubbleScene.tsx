@@ -2,8 +2,6 @@ import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, useEnvironment, useTexture } from "@react-three/drei";
 import * as THREE from "three";
-import { Perf } from "r3f-perf";
-import BenchmarkProbe from "./BenchmarkProbe";
 
 // Cover disc shader: stays IN FRONT of the bubble (no refraction) and
 // fades to fully transparent toward the rim — so the iridescent bubble
@@ -114,12 +112,6 @@ export default function BubbleScene(props: Props) {
     >
       <Suspense fallback={null}>
         <Scene {...props} />
-        {import.meta.env.DEV && (
-          <>
-            <Perf position="top-left" />
-            <BenchmarkProbe />
-          </>
-        )}
       </Suspense>
     </Canvas>
   );
@@ -182,7 +174,12 @@ function Scene({
     return bubbles.map((b) => {
       let radiusPx = 80;
       if (mode === "desktop" && b.sizeVmin) {
-        radiusPx = (Math.min(size.width, size.height) * b.sizeVmin) / 100 / 2;
+        // Use the arithmetic mean of width + height instead of vmin,
+        // so the bubble grows with the OVERALL viewport size — bigger
+        // on wide monitors, smaller on narrow ones — instead of being
+        // capped by the smaller axis. Equivalent CSS is
+        // `calc((Nvw + Nvh) / 2)`.
+        radiusPx = (((size.width + size.height) / 2) * b.sizeVmin) / 100 / 2;
       } else if (mode === "mobile" && b.sizeVw) {
         radiusPx = (size.width * b.sizeVw) / 100 / 2;
       }

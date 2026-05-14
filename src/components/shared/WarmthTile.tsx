@@ -3,17 +3,29 @@ import type { Work } from "../../data/works";
 import { useFloating } from "./useFloating";
 import { useIsTouch } from "./useMediaQuery";
 
-// Drift-grid tile (restored from the pre-bubble layout). Two behaviors:
+// Drift-grid tile. Each tile's shape is driven by the actual cover
+// image's aspect ratio (measured at mount via Image()) so the poster
+// isn't cropped — the LAYOUT just sets the *width* and the position.
+//
+// Behaviors:
 //   1. Subtle 3D tilt that tracks the cursor inside the tile (±6°).
 //      Skipped on touch devices.
 //   2. On hover/tap, a slow cross-fade slideshow of the work's images.
-//      images[0] is the higher-res twin of the cover, so we skip it.
+//   3. Caption: fades in on hover; on touch devices it's always shown
+//      since there's no hover.
+//   4. Non-hovered tiles fade toward grayscale with a smooth filter
+//      transition (not an instant snap).
 
 export type Tile = {
+  // Position in viewport percent.
   x: number;
   y: number;
+  // Base width in viewport percent. Tile height is derived from the
+  // image's natural aspect ratio.
   w: number;
-  h: number;
+  // Optional fallback aspect ratio used until the image is measured.
+  // Useful so the asymmetric drift layout doesn't jump on first paint.
+  aspectFallback?: number;
   rot: number;
   depth: number;
 };
@@ -40,6 +52,23 @@ export default function WarmthTile(props: Props) {
 
   const isHover = hover === index;
   const dim = hover !== null && !isHover;
+
+  // ---- Pre-measure image aspect ratio ----
+  const [aspect, setAspect] = useState<number>(tile.aspectFallback ?? 1);
+  useEffect(() => {
+    const img = new Image();
+    const apply = () => {
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        setAspect(img.naturalWidth / img.naturalHeight);
+      }
+    };
+    img.onload = apply;
+    img.src = work.cover;
+    if (img.complete) apply();
+    return () => {
+      img.onload = null;
+    };
+  }, [work.cover]);
 
   // ---- 3D tilt (desktop only) ----
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -125,6 +154,10 @@ export default function WarmthTile(props: Props) {
 
   const [srcA, srcB] = layersRef.current;
 
+  // On touch devices, the caption stays visible since there's no hover
+  // to reveal it. On desktop, it fades in on hover.
+  const captionVisible = touch || isHover;
+
   return (
     <button
       ref={btnRef}
@@ -138,7 +171,7 @@ export default function WarmthTile(props: Props) {
         left: `${tile.x}%`,
         top: `${tile.y}%`,
         width: `${tile.w}%`,
-        height: `${tile.h}%`,
+        aspectRatio: aspect,
         padding: 0,
         background: "none",
         border: 0,
@@ -159,7 +192,7 @@ export default function WarmthTile(props: Props) {
           height: "100%",
           transformStyle: touch ? undefined : "preserve-3d",
           transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) scale(${isHover ? 1.02 : 1})`,
-          transition: "box-shadow 0.4s ease",
+          transition: "box-shadow 0.4s ease, transform 0.3s ease",
           boxShadow: isHover
             ? "0 30px 80px rgba(0,0,0,0.25)"
             : "0 10px 30px rgba(0,0,0,0.10)",
@@ -200,16 +233,23 @@ export default function WarmthTile(props: Props) {
         <div
           style={{
             position: "absolute",
-            left: 12,
-            bottom: 10,
+            left: 14,
+            bottom: 12,
+            right: 14,
             fontFamily: "var(--mono)",
-            fontSize: 10,
-            letterSpacing: "0.12em",
+            // Bigger than before; reads well on touch and at a glance.
+            fontSize: "clamp(13px, 1.2vw, 16px)",
+            letterSpacing: "0.14em",
             textTransform: "uppercase",
             color: "#fff",
-            mixBlendMode: "difference",
-            opacity: isHover ? 1 : 0,
-            transition: "opacity 0.25s ease",
+            // Layered dark halo for legibility on bright covers (replaces
+            // the difference-blend that produced muddy hues over varied
+            // imagery).
+            textShadow:
+              "0 1px 2px rgba(0,0,0,0.55), " +
+              "0 0 12px rgba(0,0,0,0.4)",
+            opacity: captionVisible ? 1 : 0,
+            transition: "opacity 0.35s ease",
             pointerEvents: "none",
             transform: touch ? undefined : "translateZ(20px)",
           }}
@@ -262,8 +302,11 @@ function layerImg(visible: boolean, dim: boolean): React.CSSProperties {
     objectFit: "cover",
     display: "block",
     opacity: visible ? 1 : 0,
-    transition: "opacity 0.6s ease",
+    // Both opacity (for the cross-fade slideshow) AND filter (for the
+    // smooth gray-on-other-hover) transition. Without filter being
+    // listed here it would snap instantly when hover state changed.
+    transition: "opacity 0.6s ease, filter 0.5s ease",
     userSelect: "none",
-    filter: dim ? "grayscale(0.5) brightness(0.88)" : "none",
+    filter: dim ? "grayscale(0.75) brightness(0.85)" : "grayscale(0) brightness(1)",
   };
 }
