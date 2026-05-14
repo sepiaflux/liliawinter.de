@@ -266,6 +266,28 @@ function ImageButton({
   theme: "light" | "dark";
   eager?: boolean;
 }) {
+  // Pre-measure the image's intrinsic aspect ratio via Image(), then
+  // apply it to the button container as `aspect-ratio` BEFORE the
+  // visible <img> paints. The container reserves the correct height
+  // immediately, so there's no layout shift when the real image loads.
+  // Default placeholder "4 / 5" prevents a flash of zero-height before
+  // measurement completes (usually within one frame from browser cache).
+  const [aspectRatio, setAspectRatio] = useState<string>("4 / 5");
+  useEffect(() => {
+    const img = new Image();
+    const apply = () => {
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        setAspectRatio(`${img.naturalWidth} / ${img.naturalHeight}`);
+      }
+    };
+    img.onload = apply;
+    img.src = src;
+    if (img.complete) apply();
+    return () => {
+      img.onload = null;
+    };
+  }, [src]);
+
   return (
     <button
       type="button"
@@ -280,8 +302,13 @@ function ImageButton({
         cursor: "zoom-in",
         margin: 0,
         width: "100%",
+        aspectRatio,
         display: "block",
         overflow: "hidden",
+        boxShadow:
+          theme === "light"
+            ? "0 18px 44px rgba(0,0,0,0.12)"
+            : "0 18px 44px rgba(0,0,0,0.5)",
       }}
     >
       <img
@@ -292,13 +319,10 @@ function ImageButton({
         draggable={false}
         style={{
           width: "100%",
-          height: "auto",
+          height: "100%",
+          objectFit: "cover",
           display: "block",
           userSelect: "none",
-          boxShadow:
-            theme === "light"
-              ? "0 18px 44px rgba(0,0,0,0.12)"
-              : "0 18px 44px rgba(0,0,0,0.5)",
         }}
       />
       <span
