@@ -348,7 +348,7 @@ function Scene({
       // Animate envMapIntensity with the same spring → the highlight on
       // the bubble fades up on hover and overshoots like the scale.
       const mat = matRefs.current[i];
-      if (mat) mat.envMapIntensity = 1.8 * lightMul.current[i];
+      if (mat) mat.envMapIntensity = 2 * lightMul.current[i];
 
       // Publish position + scale so DOM hitboxes/captions can follow.
       if (transformsRef && transformsRef.current) {
@@ -379,9 +379,11 @@ function Scene({
   return (
     <>
       <ambientLight intensity={0.4} />
-      {/* Poly Haven rogland_clear_night — the night-sky HDR you picked. */}
+      {/* Poly Haven rogland_clear_night, converted to a tiny 256×128 JPG
+          (~5 KB instead of 1.7 MB). The reflection is faint anyway, so
+          the LDR conversion is imperceptible — same starry-night vibe. */}
       <Environment
-        files="/hdr/rogland_clear_night_1k.hdr"
+        files="/hdr/rogland_clear_night.jpg"
         resolution={128}
         background={false}
       />
@@ -451,16 +453,14 @@ function Bubble3D({
 
   return (
     <group ref={attachGroup}>
-      {/* BACK SHELL — solid BG-pink, opaque. Sits behind everything;
-          guarantees that the bubble silhouette has BG-pink pixels on
-          the canvas, so the rim composites onto the page WITHOUT
-          subtracting brightness. Also means the photo above fades
-          gracefully to BG-pink instead of into nothing — which is what
-          made the fade work nicely on dark photos before. */}
+      {/* BACK SHELL — solid dusty-pink, opaque. Slightly more saturated
+          and a touch darker than the page BG so the fade endpoint
+          reads as a warm pinkish-gray rather than brightening to white
+          when the additive front shell layers reflections on top. */}
       <mesh renderOrder={0}>
         <sphereGeometry args={[radiusPx, 48, 32]} />
         <meshBasicMaterial
-          color="#edcdd1"
+          color="#dcb8be"
           transparent={false}
           depthWrite={false}
           side={THREE.FrontSide}
@@ -495,15 +495,20 @@ function Bubble3D({
           metalness={0}
           ior={1.33}
           reflectivity={0.5}
+          // Multiplier on the base specular layer — pushes the env-map
+          // reflection out of the Fresnel-only rim band into the body
+          // of the bubble. 3× is enough to see the starry sky across
+          // the surface without it overwhelming the photo underneath.
+          specularIntensity={1.5}
           iridescence={1}
           iridescenceIOR={1.3}
           iridescenceThicknessRange={[100, 400]}
-          clearcoat={0.9}
-          clearcoatRoughness={0.3}
-          envMapIntensity={1.8}
+          clearcoat={0.5}
+          clearcoatRoughness={0.2}
+          envMapIntensity={2}
           color="#0a0608"
           transparent
-          opacity={0.5}
+          opacity={0.7}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           side={THREE.FrontSide}
