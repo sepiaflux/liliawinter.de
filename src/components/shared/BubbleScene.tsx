@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, useTexture } from "@react-three/drei";
 import * as THREE from "three";
@@ -130,12 +130,26 @@ function Scene({
   startInitialSpawn,
 }: Props) {
   const covers = useTexture(bubbles.map((b) => b.cover));
-  useEffect(() => {
+  // Set BEFORE the first GL render (not in a regular useEffect, which
+  // runs after) so the texture gets uploaded with the right config on
+  // every mount — including after the desktop ↔ mobile breakpoint flip
+  // when a new <Canvas> picks up the cached texture.
+  //
+  // colorSpace = NoColorSpace is intentional: the cover disc uses a
+  // custom shaderMaterial that doesn't auto-inject the linear → sRGB
+  // encode step that built-in materials get. If we marked the texture
+  // sRGB, the GPU would linearize on sample and our shader would write
+  // those linear values to an sRGB-display framebuffer, producing the
+  // "deep / over-saturated colors after resize" bug (because the first
+  // mount happened to skip the conversion path while later mounts
+  // didn't). With NoColorSpace, the shader gets the raw sRGB bytes and
+  // writes them straight through — same result on every mount.
+  useLayoutEffect(() => {
     covers.forEach((t) => {
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = 2;
-      t.generateMipmaps = true;
-      t.minFilter = THREE.LinearMipmapLinearFilter;
+      t.colorSpace = THREE.NoColorSpace;
+      t.anisotropy = 8;
+      t.needsUpdate = true;
+      t.source.needsUpdate = true;
     });
   }, [covers]);
 
