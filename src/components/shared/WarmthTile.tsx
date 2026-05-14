@@ -36,6 +36,12 @@ type Props = {
   index: number;
   offX: number;
   offY: number;
+  // Multiplier for pixel-based drift + parallax offsets. The drift
+  // grid is tuned against a ~1600px-wide stage; on smaller stages the
+  // same absolute pixel offsets become a larger fraction of the row
+  // gap and start to overlap neighbours. WorkGrid measures the stage
+  // and passes `stageWidth / 1600` so motion scales with the layout.
+  stageScale: number;
   hover: number | null;
   onHover: (i: number | null) => void;
   onOpen: () => void;
@@ -46,7 +52,7 @@ const SMOOTH = 0.16;
 const CYCLE_MS = 1400;
 
 export default function WarmthTile(props: Props) {
-  const { work, tile, index, offX, offY, hover, onHover, onOpen } = props;
+  const { work, tile, index, offX, offY, stageScale, hover, onHover, onOpen } = props;
   const touch = useIsTouch();
   const f = useFloating(index, { ampXY: 5, ampRot: 0.35, ampScale: 0.004, speed: 0.7 });
 
@@ -148,8 +154,8 @@ export default function WarmthTile(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHover]);
 
-  const px = offX * tile.depth * 60 + f.dx;
-  const py = offY * tile.depth * 60 + f.dy;
+  const px = (offX * tile.depth * 60 + f.dx) * stageScale;
+  const py = (offY * tile.depth * 60 + f.dy) * stageScale;
   const rot = tile.rot + f.rot;
 
   const [srcA, srcB] = layersRef.current;
@@ -172,6 +178,11 @@ export default function WarmthTile(props: Props) {
         top: `${tile.y}%`,
         width: `${tile.w}%`,
         aspectRatio: aspect,
+        // Safety cap so an unexpectedly-portrait cover can never punch
+        // out of its row. The aspect-locked stage in WorkGrid plus the
+        // tuned LAYOUT widths already prevent overflow for today's
+        // covers — this is belt-and-suspenders against future images.
+        maxHeight: "44%",
         padding: 0,
         background: "none",
         border: 0,

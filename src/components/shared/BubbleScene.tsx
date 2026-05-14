@@ -373,6 +373,21 @@ function Scene({
       g.rotation.z = rots[i];
       g.scale.set(finalScale, finalScale, finalScale);
 
+      // Bump renderOrder on every child mesh of the hovered bubble.
+      // Without this, three.js still draws bubble A's front shell
+      // (renderOrder=2) AFTER bubble B's back shell (renderOrder=0)
+      // regardless of z — so a non-hovered front shell can paint over
+      // a hovered back shell. Adding a large offset puts the entire
+      // hovered bubble in its own pass that draws last.
+      const roOffset = isHover ? 1000 : 0;
+      for (let k = 0; k < g.children.length; k++) {
+        const child = g.children[k];
+        if (child.userData._baseRO === undefined) {
+          child.userData._baseRO = child.renderOrder;
+        }
+        child.renderOrder = child.userData._baseRO + roOffset;
+      }
+
       // Animate envMapIntensity with the same spring → the highlight on
       // the bubble fades up on hover and overshoots like the scale.
       const mat = matRefs.current[i];

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import type { Work } from "../data/works";
 import { useMouse } from "./shared/useFloating";
 import { useIsMobile } from "./shared/useMediaQuery";
@@ -18,17 +18,23 @@ const SeaShimmer = lazy(() => import("./shared/SeaShimmer"));
 // aspect ratio. On mobile, the works render as a scrollable vertical
 // column with full-width tiles.
 
-// Desktop layout. `w` = tile width in viewport %. Height is derived
-// from the cover image's intrinsic aspect ratio (see WarmthTile), so
-// the LAYOUT no longer carries `h`.
+// Desktop layout. `w` = tile width as a % of the aspect-locked stage
+// (see the 4:3 wrapper below). Height is derived from the cover image's
+// intrinsic aspect ratio (see WarmthTile).
+//
+// Widths are tuned per-slot for the actual cover aspect of the work at
+// that index, so portrait covers (otherworldly ≈0.71, vanna ≈0.63,
+// lia-libre ≈0.68) don't render so tall that they overflow their row
+// and overlap the row below. Math: tile height % = (4/3) * w / aspect.
+// Each row 1 tile is kept ≤ 50% bottom; each row 2 tile ≤ 95% bottom.
 const LAYOUT: Tile[] = [
-  { x: 6,  y: 14, w: 22, rot: -2.5, depth: 0.4 },
-  { x: 34, y: 6,  w: 26, rot:  1.5, depth: 0.7 },
-  { x: 66, y: 14, w: 22, rot: -1.0, depth: 0.5 },
-  { x: 8,  y: 56, w: 18, rot:  2.0, depth: 0.9 },
-  { x: 30, y: 50, w: 28, rot: -1.2, depth: 0.3 },
-  { x: 62, y: 56, w: 18, rot:  1.6, depth: 0.8 },
-  { x: 82, y: 56, w: 14, rot: -2.4, depth: 0.6 },
+  { x: 6,  y: 14, w: 22, rot: -2.5, depth: 0.4 }, // ghostworld (A≈1.50, landscape)
+  { x: 34, y: 6,  w: 22, rot:  1.5, depth: 0.7 }, // otherworldly (A≈0.71, portrait)
+  { x: 68, y: 14, w: 16, rot: -1.0, depth: 0.5 }, // vanna-analog (A≈0.63, tall portrait)
+  { x: 8,  y: 55, w: 14, rot:  2.0, depth: 0.9 }, // lia-libre (A≈0.68, poster)
+  { x: 26, y: 52, w: 24, rot: -1.2, depth: 0.3 }, // escapism (A≈0.80)
+  { x: 56, y: 55, w: 18, rot:  1.6, depth: 0.8 }, // lichtuebung (A≈0.80)
+  { x: 80, y: 58, w: 14, rot: -2.4, depth: 0.6 }, // aufm-boxi (A≈0.80)
 ];
 
 export default function WorkGrid({
@@ -43,6 +49,22 @@ export default function WorkGrid({
   const [hover, setHover] = useState<number | null>(null);
   const [selected, setSelected] = useState<Work | null>(null);
   const [detailIn, setDetailIn] = useState(false);
+
+  // Track the stage width so we can scale pixel-based drift + parallax
+  // offsets proportionally. Without this, the offsets stay the same
+  // absolute size while the stage shrinks, eating into the row gap and
+  // overlapping tiles on smaller viewports.
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [stageScale, setStageScale] = useState(1);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => setStageScale(el.clientWidth / 1600);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mobile]);
 
   const list = works.slice(0, LAYOUT.length);
   const offX = mx - 0.5;
@@ -190,32 +212,46 @@ export default function WorkGrid({
           ))}
         </main>
       ) : (
-        // Constrain the asymmetric layout to a fixed max-width/height so
-        // tiles can't grow into each other on wide monitors. Tiles use
-        // absolute positioning (x/y/w as %) — those % values now resolve
-        // relative to this capped container instead of the full viewport.
+        // Aspect-locked stage. The previous container used `inset:0`, so
+        // its HEIGHT was the viewport height — meaning a portrait image
+        // (e.g. the lia-libre poster) would render with a height in % of
+        // *container height* that shifted with every resize, causing
+        // tiles to overlap adjacent rows. With a fixed 16:9 stage the
+        // entire drift grid scales as one unit, so a LAYOUT that fits
+        // at one viewport size fits at every viewport size.
         <div
           style={{
             position: "absolute",
             inset: 0,
-            maxWidth: 1600,
-            margin: "0 auto",
+            display: "grid",
+            placeItems: "center",
             zIndex: 2,
           }}
         >
-          {list.map((work, i) => (
-            <WarmthTile
-              key={work.slug}
-              work={work}
-              tile={LAYOUT[i]}
-              index={i}
-              offX={offX}
-              offY={offY}
-              hover={hover}
-              onHover={setHover}
-              onOpen={() => open(work)}
-            />
-          ))}
+          <div
+            ref={stageRef}
+            style={{
+              position: "relative",
+              width:
+                "min(calc(100vw - 64px), calc((100vh - 100px) * 4 / 3), 1600px)",
+              aspectRatio: "4 / 3",
+            }}
+          >
+            {list.map((work, i) => (
+              <WarmthTile
+                key={work.slug}
+                work={work}
+                tile={LAYOUT[i]}
+                index={i}
+                offX={offX}
+                offY={offY}
+                stageScale={stageScale}
+                hover={hover}
+                onHover={setHover}
+                onOpen={() => open(work)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
