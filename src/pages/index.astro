@@ -1,9 +1,8 @@
 ---
 import Base from "../layouts/Base.astro";
 import Home from "../components/Home.tsx";
-import { works } from "../data/works";
 ---
 
 <Base title="Lilia Winter — Video, Foto, Installation">
-  <Home client:only="react" works={works} />
+  <Home client:only="react" />
 </Base>

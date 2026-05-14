@@ -1,6 +1,6 @@
 ---
 import Base from "../../layouts/Base.astro";
-import Home from "../../components/Home.tsx";
+import WorkGrid from "../../components/WorkGrid.tsx";
 import { works } from "../../data/works";
 
 export function getStaticPaths() {
@@ -16,5 +16,5 @@ const pageDescription = work.description;
 ---
 
 <Base title={pageTitle} description={pageDescription} ogImage={work.cover}>
-  <Home client:only="react" works={works} initialSlug={work.slug} />
+  <WorkGrid client:only="react" works={works} initialSlug={work.slug} />
 </Base>

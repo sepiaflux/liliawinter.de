@@ -1,0 +1,20 @@
+---
+import Base from "../layouts/Base.astro";
+import PlaceholderPage from "../components/PlaceholderPage.tsx";
+---
+
+<Base
+  title="Lebenslauf — Lilia Winter"
+  description="Werdegang, Ausstellungen, Stipendien — Lilia Winter, Berlin."
+>
+  <PlaceholderPage
+    client:only="react"
+    subtitle="Werdegang"
+    title="Lebenslauf"
+    body={[
+      "Geboren 1996 in Berlin. Lebt und arbeitet in Berlin und Leipzig.",
+      "Studium der Bildenden Kunst an der HGB Leipzig (2018–2024). Diplom mit Auszeichnung.",
+      "Gruppen- und Einzelausstellungen u. a. in Berlin, Leipzig und Wien. Aktuelle Texte und ausführlicher Lebenslauf auf Anfrage.",
+    ]}
+  />
+</Base>

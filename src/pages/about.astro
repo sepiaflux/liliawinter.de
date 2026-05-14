@@ -1,0 +1,20 @@
+---
+import Base from "../layouts/Base.astro";
+import PlaceholderPage from "../components/PlaceholderPage.tsx";
+---
+
+<Base
+  title="Über — Lilia Winter"
+  description="Lilia Winter — Video, Foto, Installation. Über die Arbeit und das Studio."
+>
+  <PlaceholderPage
+    client:only="react"
+    subtitle="Über"
+    title="Über mich"
+    body={[
+      "Lilia Winter arbeitet zwischen Video, Foto und Installation. Ihre Arbeiten kreisen um Beobachtung, Erinnerung und das Übersehen-Werden — und entstehen häufig im Übergang zwischen Inszenierung und Dokument.",
+      "Ihre Bilder findet sie in leerstehenden Räumen, an Stadträndern und an Orten, an denen das Licht sich kurz verläuft. Im Studio arbeitet sie analog und digital, oft im Wechsel.",
+      "Kontakt: mail@liliawinter.de — für Anfragen, Kollaborationen und Pressetexte.",
+    ]}
+  />
+</Base>

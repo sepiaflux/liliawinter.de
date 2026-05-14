@@ -72,7 +72,13 @@ export type BubbleTransform = {
 type Props = {
   bubbles: BubbleSpec[];
   hoverIdx: number | null;
+  // Primary popping bubble — the one the user clicked. Triggers
+  // re-spawn animation when it transitions back to null.
   poppingIdx: number | null;
+  // Additional bubbles that should be hidden from the scene (used by
+  // the homepage's cascade-pop transition: after the clicked bubble
+  // pops, the rest are hidden one-by-one before navigating away).
+  hiddenIdxs?: Set<number>;
   mx: number;
   my: number;
   mode: "desktop" | "mobile";
@@ -123,6 +129,7 @@ function Scene({
   bubbles,
   hoverIdx,
   poppingIdx,
+  hiddenIdxs,
   mx,
   my,
   mode,
@@ -319,7 +326,7 @@ function Scene({
       const g = groupRefs.current[i];
       if (!g) continue;
 
-      if (poppingIdx === i) {
+      if (poppingIdx === i || hiddenIdxs?.has(i)) {
         g.visible = false;
         // Don't touch transformsRef — the wrapper keeps its last frame's
         // transform so PopDroplets render exactly where the bubble was,

@@ -1,4 +1,6 @@
 ---
+import { ClientRouter } from "astro:transitions";
+
 interface Props {
   title?: string;
   description?: string;
@@ -38,6 +40,8 @@ const ogImageAbs = new URL(ogImage, Astro.site ?? "https://liliawinter.de").toSt
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImageAbs} />
+
+    <ClientRouter />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -123,6 +127,31 @@ const ogImageAbs = new URL(ogImage, Astro.site ?? "https://liliawinter.de").toSt
         50%      { opacity: 1; }
       }
       .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+      /* ── Page transitions ────────────────────────────────────────
+         Astro View Transitions: the home page calls navigate(...)
+         after the pop-chain animation completes, and we slide the
+         destination page in from the right. Back navigation is a
+         simple cross-fade. */
+      @keyframes lw-slide-in-right {
+        from { transform: translateX(8%); opacity: 0; }
+        to   { transform: translateX(0);   opacity: 1; }
+      }
+      @keyframes lw-fade-out {
+        to { opacity: 0; }
+      }
+      ::view-transition-old(root) {
+        animation: lw-fade-out 0.35s ease-out both;
+      }
+      ::view-transition-new(root) {
+        animation: lw-slide-in-right 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+          animation: none !important;
+        }
+      }
     </style>
   </head>
   <body>

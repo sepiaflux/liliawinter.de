@@ -1,0 +1,12 @@
+---
+import Base from "../layouts/Base.astro";
+import WorkGrid from "../components/WorkGrid.tsx";
+import { works } from "../data/works";
+---
+
+<Base
+  title="Portfolio — Lilia Winter"
+  description="Eine driftende Sammlung von Video- und Fotoarbeiten zwischen Beobachtung und Auflösung."
+>
+  <WorkGrid client:only="react" works={works} />
+</Base>

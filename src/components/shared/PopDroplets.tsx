@@ -59,32 +59,6 @@ export default function PopDroplets({ style }: { style?: CSSProperties }) {
         ...style,
       }}
     >
-      {/* Shockwave ring — expanding halo */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: "50%",
-          border: "2px solid rgba(255, 245, 250, 0.9)",
-          boxShadow:
-            "0 0 28px rgba(255, 230, 240, 0.6), inset 0 0 22px rgba(255, 240, 245, 0.5)",
-          animation:
-            "pop-shockwave 0.9s cubic-bezier(0.2, 0.55, 0.35, 1) forwards",
-          opacity: 0,
-        }}
-      />
-      {/* Secondary inner flash */}
-      <div
-        style={{
-          position: "absolute",
-          inset: "12%",
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(255,245,250,0.6) 0%, rgba(255,235,245,0) 70%)",
-          animation: "pop-flash 0.5s ease-out forwards",
-          opacity: 0,
-        }}
-      />
       {inner.map((d, i) => (
         <span
           key={`i${i}`}
