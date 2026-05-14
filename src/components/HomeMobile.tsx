@@ -42,6 +42,14 @@ export default function HomeMobile({ works }: { works: Work[] }) {
   const placeholderRefs = useRef<(HTMLDivElement | null)[]>([]);
   const innerRefs = useRef<(HTMLDivElement | null)[]>([]);
   const transformsRef = useRef<BubbleTransform[]>([]);
+  // Scroll handling: instead of pushing scroll through React state
+  // (which causes a re-render per frame and makes bubbles lag visibly
+  // behind native scroll), we keep scroll in a ref and let BubbleScene
+  // read it each frame to shift the camera. baselineScrollY captures
+  // window.scrollY at the moment bubbles were measured; scrollDeltaRef
+  // is the difference since then.
+  const scrollDeltaRef = useRef(0);
+  const baselineScrollYRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,8 +71,13 @@ export default function HomeMobile({ works }: { works: Work[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Measure each placeholder's center (in viewport %) and feed the scene.
+  // Measure each placeholder's center (in viewport %) at the *current*
+  // scroll position, then capture that scroll position as the baseline.
+  // After this, scroll is tracked purely via scrollDeltaRef — no
+  // re-measure, no setState.
   function measure() {
+    baselineScrollYRef.current = window.scrollY;
+    scrollDeltaRef.current = 0;
     const out: BubbleSpec[] = [];
     for (let i = 0; i < works.length; i++) {
       const el = placeholderRefs.current[i];
@@ -88,17 +101,20 @@ export default function HomeMobile({ works }: { works: Work[] }) {
 
   useLayoutEffect(() => {
     measure();
-    let raf = 0;
+    // Scroll: ref-only update. Synchronous, no React work, no rAF
+    // debounce — BubbleScene reads this directly each frame so there
+    // is zero lag between native scroll and the bubble shift.
     const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(measure);
+      scrollDeltaRef.current = window.scrollY - baselineScrollYRef.current;
     };
+    // Resize re-baselines: we re-measure (since layout changes) and
+    // reset scrollDelta to 0.
+    const onResize = () => measure();
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     return () => {
-      cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [works]);
@@ -185,6 +201,7 @@ export default function HomeMobile({ works }: { works: Work[] }) {
             mode="mobile"
             transformsRef={transformsRef}
             startInitialSpawn={ready}
+            scrollDeltaRef={scrollDeltaRef}
           />
         </Suspense>
       </div>

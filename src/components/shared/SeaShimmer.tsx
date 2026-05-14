@@ -1,5 +1,5 @@
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 // Subtle sea-surface caustics behind the bubbles. Uses the classic
@@ -47,12 +47,10 @@ const FRAG = /* glsl */ `
     return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
   }
   float fbm(vec2 p) {
-    // 4 octaves: visually indistinguishable from 5 after the blur,
-    // saves ~20% of per-pixel work.
     float v = 0.0;
     float a = 0.5;
     mat2 rot = mat2(0.80, 0.60, -0.60, 0.80);
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
       v += a * vnoise(p);
       p = rot * p * 2.0 + vec2(100.0);
       a *= 0.5;
@@ -89,13 +87,24 @@ const FRAG = /* glsl */ `
 
 function Plane() {
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  useFrame(({ clock, size }) => {
-    const m = matRef.current;
-    if (!m) return;
-    if (document.hidden) return;
-    m.uniforms.iTime.value = clock.elapsedTime;
-    m.uniforms.iResolution.value.set(size.width, size.height);
-  });
+  const invalidate = useThree((s) => s.invalidate);
+  const size = useThree((s) => s.size);
+
+  // 10fps tick. The shimmer is so slow + heavily blurred that the
+  // discrete jumps are imperceptible, and we save ~6× the GPU work
+  // vs running at 60fps.
+  useEffect(() => {
+    const start = performance.now();
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      const m = matRef.current;
+      if (!m) return;
+      m.uniforms.iTime.value = (performance.now() - start) / 1000;
+      m.uniforms.iResolution.value.set(size.width, size.height);
+      invalidate();
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [invalidate, size.width, size.height]);
   return (
     <mesh>
       <planeGeometry args={[1, 1]} />
@@ -130,7 +139,8 @@ export default function SeaShimmer() {
       <Canvas
         orthographic
         camera={{ position: [0, 0, 1] }}
-        dpr={[1, 1.25]}
+        dpr={[1, 1.5]}
+        frameloop="demand"
         gl={{ alpha: true, antialias: false, powerPreference: "low-power" }}
         style={{ position: "absolute", inset: 0 }}
       >
