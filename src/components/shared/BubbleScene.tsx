@@ -1,6 +1,6 @@
-import { Suspense, useLayoutEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, useTexture } from "@react-three/drei";
+import { Environment, useEnvironment, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { Perf } from "r3f-perf";
 import BenchmarkProbe from "./BenchmarkProbe";
@@ -152,6 +152,19 @@ function Scene({
       t.source.needsUpdate = true;
     });
   }, [covers]);
+
+  // Same fix pattern for the env-map cubemap. drei's Environment runs
+  // PMREMGenerator on the equirectangular JPG to produce a cube
+  // texture, and caches both. The cached cube belongs to the previous
+  // renderer; on remount the new renderer can't use it → reflections
+  // silently disappear until refresh. Clearing on unmount forces a
+  // fresh PMREM bake against the new renderer.
+  useEffect(() => {
+    const envFile = "/hdr/rogland_clear_night.jpg";
+    return () => {
+      useEnvironment.clear?.({ files: envFile });
+    };
+  }, []);
 
   const groupRefs = useRef<(THREE.Group | null)[]>([]);
   const matRefs = useRef<(THREE.MeshPhysicalMaterial | null)[]>([]);

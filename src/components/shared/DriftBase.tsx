@@ -28,13 +28,13 @@ type Slot = {
 
 // Centers (previous layout used top-left + size, so cx = x + size/2, cy = y + size/2)
 const SLOTS: Slot[] = [
-  { cx: 18, cy: 28, size: 28, depth: 0.45 },
-  { cx: 47, cy: 15, size: 22, depth: 0.75 },
-  { cx: 79, cy: 33, size: 30, depth: 0.5  },
-  { cx: 16, cy: 66, size: 20, depth: 0.9  },
-  { cx: 49, cy: 67, size: 34, depth: 0.3  },
-  { cx: 80, cy: 68, size: 24, depth: 0.7  },
-  { cx: 93, cy: 39, size: 18, depth: 0.6  },
+  { cx: 18, cy: 28, size: 32, depth: 0.45 },
+  { cx: 47, cy: 15, size: 25, depth: 0.75 },
+  { cx: 79, cy: 33, size: 34, depth: 0.5  },
+  { cx: 16, cy: 66, size: 23, depth: 0.9  },
+  { cx: 49, cy: 67, size: 38, depth: 0.3  },
+  { cx: 80, cy: 68, size: 32, depth: 0.7  },
+  { cx: 93, cy: 39, size: 21, depth: 0.6  },
 ];
 
 const POP_OPEN_DELAY = 380;
