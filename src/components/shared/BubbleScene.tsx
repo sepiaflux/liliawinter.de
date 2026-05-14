@@ -335,9 +335,6 @@ function Scene({
       const isHover = hoverIdx === i;
 
       // --- Bouncy hover via damped spring ---
-      // Bigger scale + brighter envMap on the hovered bubble make it
-      // visibly stand out. Underdamped spring overshoots past target,
-      // settles back.
       const sTarget = isHover ? 1.1 : 1;
       const lTarget = isHover ? 2.4 : 1;
       const stiff = 0.22;
@@ -372,7 +369,7 @@ function Scene({
 
       // Hovered bubble gets pushed toward the camera so it sorts in
       // front of every other bubble (transparent pass renders far→near).
-      g.position.set(desired.current[i].x, desired.current[i].y, isHover ? 50 : 0);
+      g.position.set(desired.current[i].x, desired.current[i].y, isHover ? 100 : 0);
       g.rotation.z = rots[i];
       g.scale.set(finalScale, finalScale, finalScale);
 

@@ -56,9 +56,9 @@ const DESKTOP_SLOTS: Slot[] = [
 // 64vw bubble nearly fills the screen width — gives the title plenty
 // of room to be legible.
 const MOBILE_SLOTS: Slot[] = [
-  { cx: 50, cy: 20, size: 64, depth: 0.3 },
-  { cx: 50, cy: 50, size: 64, depth: 0.4 },
-  { cx: 50, cy: 80, size: 64, depth: 0.3 },
+  { cx: 50, cy: 20, size: 58, depth: 0.3 },
+  { cx: 50, cy: 50, size: 58, depth: 0.4 },
+  { cx: 50, cy: 80, size: 58, depth: 0.3 },
 ];
 
 const POP_FIRST_MS = 380;
@@ -236,6 +236,10 @@ export default function SectionBubbles() {
                 transformOrigin: "center",
                 willChange: "transform",
                 pointerEvents: poppingIdx !== null ? "none" : "auto",
+                // Hovered wrapper sits above its siblings so its label
+                // (and hit-area) layer over neighbouring bubbles when
+                // the hover-grow push brings them close.
+                zIndex: hover === i ? 2 : 1,
               }}
             >
               <button
